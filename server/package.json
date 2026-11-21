@@ -1,0 +1,1 @@
+{"name":"bestie-server","private":true,"type":"module","scripts":{"dev":"tsx watch src/index.ts","start":"node dist/server/src/index.js","build":"tsc","test":"tsx --test src/*.test.ts"},"dependencies":{"express":"^5","socket.io":"^4"},"devDependencies":{"@types/express":"^5","tsx":"^4","typescript":"^5","socket.io-client":"^4","@types/node":"^22"}}

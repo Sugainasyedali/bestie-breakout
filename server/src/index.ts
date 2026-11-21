@@ -1,0 +1,284 @@
+import express from "express";
+import { createServer } from "node:http";
+import { randomBytes } from "node:crypto";
+import { pathToFileURL } from "node:url";
+import { Server } from "socket.io";
+import {
+  chats,
+  type Ack,
+  type ClientEvents,
+  type Input,
+  type Profile,
+  type ServerEvents,
+  type View,
+} from "../../shared/model.js";
+import { action, start, tick } from "./game.js";
+type Room = {
+  v: View;
+  slots: {
+    id: string;
+    token: string;
+    socket: string;
+    last: number;
+    input: Input;
+  }[];
+};
+export function makeServer() {
+  const app = express(),
+    http = createServer(app),
+    io = new Server<ClientEvents, ServerEvents>(http, {
+      cors: { origin: process.env.CLIENT_ORIGIN?.split(",") || true },
+      maxHttpBufferSize: 4096,
+    });
+  app.get("/health", (_, res) => res.json({ ok: true }));
+  const rooms = new Map<string, Room>();
+  function emit(r: Room) {
+    r.slots.forEach((s, i) => {
+      if (s.socket)
+        io.to(s.socket).emit("state", {
+          ...r.v,
+          sequence: i === 0 ? r.v.sequence : [],
+          maze: i === 0 ? r.v.maze : [],
+        });
+    });
+  }
+  function remove(r: Room, i: number) {
+    r.slots.splice(i, 1);
+    r.v.players.splice(i, 1);
+    if (!r.slots.length) {
+      rooms.delete(r.v.code);
+      return;
+    }
+    r.v.host = r.slots[0].id;
+    r.v.phase = "lobby";
+    r.v.players.forEach((p) => (p.ready = false));
+    emit(r);
+  }
+  io.on("connection", (socket) => {
+    let room: Room | undefined,
+      id = "",
+      lastChat = 0,
+      lastAction = 0,
+      events = 0,
+      windowStart = Date.now();
+    socket.use((_, next) => {
+      if (Date.now() - windowStart > 1000) {
+        events = 0;
+        windowStart = Date.now();
+      }
+      if (++events <= 110) next();
+    });
+    function enter(r: Room, p: Profile, ack: Ack) {
+      if (!p || typeof p.name !== "string" || !p.name.trim())
+        return ack({ error: "Enter a nickname first." });
+      id = randomBytes(8).toString("hex");
+      room = r;
+      const token = randomBytes(24).toString("hex");
+      r.slots.push({
+        id,
+        token,
+        socket: socket.id,
+        last: 0,
+        input: { move: 0, jump: false },
+      });
+      r.v.players.push({
+        id,
+        name: p.name.trim().slice(0, 18),
+        color: /^#[0-9a-f]{6}$/i.test(p.color) ? p.color : "#ff9db4",
+        shape: p.shape === "Sprout" ? "Sprout" : "Bunny",
+        avatar: ["✿", "★", "♥", "☻"].includes(p.avatar) ? p.avatar : "★",
+        online: true,
+        ready: false,
+        x: 80,
+        y: 278,
+        vy: 0,
+        ground: true,
+        dir: 1,
+      });
+      if (!r.v.host) r.v.host = id;
+      rooms.set(r.v.code, r);
+      ack({ id, token, code: r.v.code });
+      emit(r);
+    }
+    socket.on("create", (p, ack) => {
+      if (typeof ack !== "function") return;
+      if (room) return ack({ error: "Leave your current room first." });
+      let code = "";
+      do {
+        code = randomBytes(4).toString("hex").slice(0, 6).toUpperCase();
+      } while (rooms.has(code));
+      enter(
+        {
+          slots: [],
+          v: {
+            code,
+            host: "",
+            players: [],
+            phase: "lobby",
+            mission: 0,
+            time: 0,
+            progress: 0,
+            mistakes: 0,
+            correct: 0,
+            keyTaken: false,
+            gate: false,
+            relay: false,
+            box: 160,
+            bridge: false,
+            runner: 1,
+            recipe: [],
+            tray: [],
+            stock: [],
+            sequence: [],
+            maze: [],
+            cell: 0,
+            paused: false,
+            history: [],
+          },
+        },
+        p,
+        ack,
+      );
+    });
+    socket.on("join", (d, ack) => {
+      if (typeof ack !== "function") return;
+      const r = rooms.get(String(d?.code).toUpperCase());
+      if (room || !r || r.slots.length >= 2)
+        return ack({
+          error: room
+            ? "Already in a room."
+            : !r
+              ? "Room code is invalid or expired."
+              : "This room is full.",
+        });
+      enter(r, d.profile, ack);
+    });
+    socket.on("restore", (d, ack) => {
+      if (typeof ack !== "function") return;
+      const r = rooms.get(d?.code),
+        s = r?.slots.find((s) => s.token === d.token);
+      if (room || !r || !s || s.socket)
+        return ack({ error: "This seat is unavailable." });
+      room = r;
+      id = s.id;
+      s.socket = socket.id;
+      r.v.players[r.slots.indexOf(s)].online = true;
+      ack({ id, token: s.token, code: r.v.code });
+      emit(r);
+    });
+    socket.on("command", (cmd) => {
+      if (!room) return;
+      const r = room,
+        v = r.v,
+        i = r.slots.findIndex((s) => s.id === id);
+      if (cmd === "leave") {
+        room = undefined;
+        remove(r, i);
+        return;
+      }
+      if (cmd === "ready" && v.phase === "lobby")
+        v.players[i].ready = !v.players[i].ready;
+      else if (id === v.host) {
+        if (cmd === "lobby") {
+          v.phase = "lobby";
+          v.players.forEach((p) => (p.ready = false));
+        } else if (v.players.length === 2 && v.players.every((p) => p.online)) {
+          if (
+            cmd === "start" &&
+            v.phase === "lobby" &&
+            v.players.every((p) => p.ready)
+          ) {
+            r.slots.forEach((s) => (s.input = { move: 0, jump: false }));
+            v.history = [];
+            start(v, 0);
+          } else if (
+            v.phase === "results" &&
+            (cmd === "again" ||
+              (cmd === "next" && v.mission < 5 && v.history.at(-1)?.win))
+          ) {
+            r.slots.forEach((s) => (s.input = { move: 0, jump: false }));
+            if (cmd === "again") v.history.pop();
+            start(v, v.mission + (cmd === "next" ? 1 : 0));
+          } else if (cmd === "pause" && v.phase === "game")
+            v.paused = !v.paused;
+        }
+      }
+      emit(r);
+    });
+    socket.on("input", (p) => {
+      const s = room?.slots.find((s) => s.id === id);
+      if (s && room?.v.phase === "game" && p && [-1, 0, 1].includes(p.move)) {
+        s.input.move = p.move;
+        s.input.jump ||= p.jump === true;
+      }
+    });
+    socket.on("action", (n) => {
+      if (
+        room &&
+        Date.now() - lastAction > 100 &&
+        room.v.players.every((p) => p.online)
+      ) {
+        lastAction = Date.now();
+        action(
+          room.v,
+          room.slots.findIndex((s) => s.id === id),
+          n,
+        );
+        emit(room);
+      }
+    });
+    socket.on("chat", (s) => {
+      if (
+        room &&
+        Date.now() - lastChat > 250 &&
+        [...chats, "😂", "😭", "🎉", "🤦", "😡", "💃", "🤔"].includes(s)
+      ) {
+        lastChat = Date.now();
+        room.slots.forEach((p) =>
+          io.to(p.socket).emit("message", { id, text: s }),
+        );
+      }
+    });
+    socket.on("disconnect", () => {
+      if (!room) return;
+      const r = room,
+        i = r.slots.findIndex((s) => s.id === id);
+      if (i < 0) return;
+      Object.assign(r.slots[i], {
+        socket: "",
+        last: Date.now(),
+        input: { move: 0, jump: false },
+      });
+      r.v.players[i].online = false;
+      if (r.v.host === id)
+        r.v.host = r.v.players.find((p) => p.online)?.id || id;
+      emit(r);
+    });
+  });
+  let frame = 0;
+  const timer = setInterval(() => {
+    frame++;
+    for (const r of rooms.values()) {
+      for (let i = r.slots.length - 1; i >= 0; i--)
+        if (!r.slots[i].socket && Date.now() - r.slots[i].last > 120000)
+          remove(r, i);
+      if (r.v.phase === "game") {
+        tick(
+          r.v,
+          r.slots.map((s) => s.input),
+          1 / 40,
+        );
+        if (frame % 3 === 0 || r.v.phase !== "game") emit(r);
+      }
+    }
+  }, 25);
+  return {
+    http,
+    close: () => {
+      clearInterval(timer);
+      io.close();
+    },
+  };
+}
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href)
+  makeServer().http.listen(Number(process.env.PORT) || 4000, "0.0.0.0");

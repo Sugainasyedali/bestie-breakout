@@ -1,0 +1,1 @@
+{"name":"bestie-breakout","private":true,"workspaces":["frontend","server"],"scripts":{"test":"npm test -w server","build":"npm run build -w server && npm run build -w frontend","dev":"node scripts/dev.mjs"}}
