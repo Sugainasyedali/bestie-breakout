@@ -576,3 +576,7 @@
     transition: none !important;
   }
 }
+
+.gameShell[data-controls="touch"] .touchPad{display:flex}
+.gameShell[data-controls="keyboard"] .touchPad{display:none}
+.gameShell[data-reduced="true"] *{animation:none!important;transition:none!important}

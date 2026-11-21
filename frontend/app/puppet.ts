@@ -118,7 +118,7 @@ export function drawPuppet(
   t: number,
   reduced: boolean,
 ): void {
-  const suit = parseInt(p.color.slice(1), 16);
+  const suit = parseInt((p.cosmetic==="violet-dye"?"#b894ef":p.color).slice(1),16);
   const clock = reduced ? 0 : t;
   const offset = p.id.charCodeAt(p.id.length - 1) || 0;
   const beat = Math.sin(clock * 0.006 + offset);
@@ -255,5 +255,11 @@ export function drawPuppet(
       .fillTriangle(24, -47, 27, -43, 24, -38)
       .fillTriangle(24, -47, 21, -43, 24, -38);
   }
+  if(p.cosmetic?.includes('hat')||p.cosmetic?.includes('cap')||p.cosmetic?.includes('crown')){
+    g.fillStyle(p.cosmetic.includes('gold')?0xffd461:0xa78cdb).fillRoundedRect(-19,-57,38,7,3);
+    if(p.cosmetic.includes('crown'))g.fillTriangle(-17,-57,-17,-73,-3,-57).fillTriangle(-10,-57,0,-78,10,-57).fillTriangle(3,-57,17,-73,17,-57);
+    else g.fillRoundedRect(-13,-72,26,16,5);
+  }
+  if(p.cosmetic?.includes('pin')){g.fillStyle(0xffd461).fillCircle(-10,-17,5);g.lineStyle(1,ink).strokeCircle(-10,-17,5)}
   g.restore();
 }

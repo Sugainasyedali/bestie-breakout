@@ -94,6 +94,9 @@ export function Arena(props: Props) {
             "A,D,W,LEFT,RIGHT,SPACE,E,ESC",
             false,
           ) as typeof this.keys;
+          try{const prefs=JSON.parse(sessionStorage.getItem('bestie-preferences')||'{}');this.reduced=this.reduced||prefs.reduced_motion===true}catch{}
+          const preferences=(e:Event)=>{this.reduced=(e as CustomEvent).detail.reduced_motion||matchMedia('(prefers-reduced-motion: reduce)').matches};
+          window.addEventListener('bestie-preferences',preferences);this.events.once('shutdown',()=>window.removeEventListener('bestie-preferences',preferences));
           const stop = () => {
             latest.current.send({ move: 0, jump: false });
             this.lastMove = 0;

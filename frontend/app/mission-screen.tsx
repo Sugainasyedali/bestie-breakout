@@ -191,6 +191,7 @@ export function MissionScreen({
     res = v.phase === "results",
     result = v.history.at(-1),
     win = !!result?.win;
+  useEffect(()=>{let active=true;fetch('/api/player').then(r=>r.ok?r.json():null).then(data=>{if(!active||!data)return;const s=data.settings;sessionStorage.setItem('bestie-preferences',JSON.stringify(s));setMusic(s.music_enabled);arcadeAudio.setEffects(s.sound_enabled);arcadeAudio.setLevels(s.music_volume,s.sound_volume);setVolume(1);root.current?.setAttribute('data-controls',s.preferred_controls);root.current?.setAttribute('data-reduced',String(s.reduced_motion));window.dispatchEvent(new CustomEvent('bestie-preferences',{detail:s}))});return()=>{active=false}},[]);
   useEffect(() => {
     const before = document.body.style.overflow;
     document.body.style.overflow = "hidden";

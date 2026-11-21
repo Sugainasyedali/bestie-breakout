@@ -222,6 +222,9 @@ class ArcadeAudio {
   private master?: GainNode;
   private musicBus?: GainNode;
   private effectsBus?: GainNode;
+  private musicLevel=1;
+  private effectsLevel=1;
+  setLevels(music:number,effects:number){this.musicLevel=Math.max(0,Math.min(1,music));this.effectsLevel=Math.max(0,Math.min(1,effects));this.fade(this.effectsBus,Number(this.effects)*this.effectsLevel);this.fade(this.musicBus,this.music&&!this.paused?.64*this.musicLevel:0)}
   private music = false;
   private effects = false;
   private volume = 0.65;
@@ -239,7 +242,7 @@ class ArcadeAudio {
       this.master.gain.value = this.volume;
       this.master.connect(this.context.destination);
       this.effectsBus = this.context.createGain();
-      this.effectsBus.gain.value = Number(this.effects);
+      this.effectsBus.gain.value = Number(this.effects)*this.effectsLevel;
       this.effectsBus.connect(this.master);
       this.musicBus = this.context.createGain();
       this.musicBus.gain.value = 0;
@@ -260,7 +263,7 @@ class ArcadeAudio {
 
   setEffects(enabled: boolean) {
     this.effects = enabled;
-    this.fade(this.effectsBus, Number(enabled));
+    this.fade(this.effectsBus, Number(enabled)*this.effectsLevel);
   }
 
   setVolume(n: number) {
@@ -357,7 +360,7 @@ class ArcadeAudio {
       return;
     }
     if (this.timer !== undefined) return;
-    this.fade(this.musicBus, 0.64);
+    this.fade(this.musicBus, 0.64*this.musicLevel);
     const bus = this.musicBus;
     this.nextBeat = ctx.currentTime + 0.025;
     const seconds = 30 / track.bpm;
