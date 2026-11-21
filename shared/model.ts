@@ -1,3 +1,4 @@
+import type {Board} from "./content/engine.js";
 export const missions = [
   [
     "Button Disaster",
@@ -67,6 +68,7 @@ export type Player = Profile & {
   x: number;
   y: number;
   vy: number;
+  cosmetic?:string;
   gestures: number;
   ground: boolean;
   dir: number;
@@ -87,6 +89,10 @@ export type View = {
   players: Player[];
   phase: "lobby" | "game" | "results";
   mission: number;
+  level?: number;
+  maxLevel?: number;
+  board?:Board;
+  saveStatus?:"pending"|"saved"|"guest";
   round: number;
   intro: number;
   outro: number;

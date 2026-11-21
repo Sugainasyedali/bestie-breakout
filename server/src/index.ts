@@ -1,6 +1,10 @@
+import {verifyTicket} from "../../shared/tickets.js";
+import {pool,unlocked} from "../../shared/database.js";
+import {catalog} from "../../shared/catalog.js";
+import {saveQueue} from "./saves.js";
 import express from "express";
 import { createServer } from "node:http";
-import { randomBytes } from "node:crypto";
+import {randomUUID,createHash, randomBytes } from "node:crypto";
 import { pathToFileURL } from "node:url";
 import { Server } from "socket.io";
 import {
@@ -15,15 +19,20 @@ import {
 import { action, start, tick } from "./game.js";
 type Room = {
   v: View;
+  session:string; attempt:string; recorded:number; started:string; campaignStart:string; originalHost:string|null;
   slots: {
     id: string;
     token: string;
+    user:string|null; max:number;
     socket: string;
     loaded: number;
     last: number;
     input: Input;
   }[];
 };
+function personalBoard(v:View,i:number){if(!v.board||!v.level)return;const b=v.board,s=catalog[v.level-1].challenge!.stages[b.stage],runner=s.role??1;
+ const reader=s.mode==='rhythm'?b.step%2:1-runner,w=b.tiles[0].length;
+ return {...b,code:i===reader?b.code:[],tiles:s.mode==='route'&&i===runner?b.tiles.map((row,y)=>[...row].map((c,x)=> Math.abs(x-b.actors[i]%w)+Math.abs(y-Math.floor(b.actors[i]/w))<=1?c:'?').join('')):b.tiles}}
 export function makeServer() {
   const app = express(),
     http = createServer(app),
@@ -33,17 +42,33 @@ export function makeServer() {
     });
   app.get("/health", (_, res) => res.json({ ok: true }));
   const rooms = new Map<string, Room>();
+  const queue=saveQueue((attempt)=>{for(const r of rooms.values())if(r.attempt===attempt){r.v.saveStatus='saved';emit(r)}});
+  function record(r:Room,abandoned=false){const v=r.v;if(!v.round||r.recorded===v.round||(!abandoned&&v.phase!=="results"))return;
+   r.recorded=v.round;const h=abandoned?undefined:v.history.at(-1),level=v.level??1;
+   if(h?.win)r.slots.forEach(s=>s.max=Math.max(s.max,Math.min(36,level+1)));
+   if(!r.slots.some(s=>s.user)&&!process.env.DATABASE_URL_POOLED){v.saveStatus='guest';return}
+   v.saveStatus=r.slots.some(s=>s.user)?'pending':'guest';
+   queue.add({id:r.attempt,session:r.session,round:v.round,level,hash:createHash('sha256').update(r.session+r.v.code).digest('hex'),host:r.originalHost,start:r.campaignStart,end:new Date().toISOString(),outcome:abandoned?'abandoned':h?.win?'win':'loss',score:h?.score??0,stars:h?.stars??0,mistakes:v.mistakes,seconds:h?.seconds??Math.round(catalog[level-1].limit-v.time),players:r.slots.map((s,i)=>({user:s.user,guest:s.id,role:i,character:v.players[i].shape}))})}
+  function begin(r:Room,level:number){r.started=new Date().toISOString();r.attempt=randomUUID();start(r.v,Math.floor((level-1)/6),level)}
+  io.use(async(socket,next)=>{const ticket=socket.handshake.auth?.ticket;if(!ticket)return next();try{const p=verifyTicket(ticket);
+   const result=await pool().query("insert into bestie.consumed_tickets(jti,expires_at) select $1,to_timestamp($2::double precision/1000) from bestie.player_profiles where id=$3 and auth_user_id=$4 on conflict do nothing returning jti",[p.jti,p.exp,p.profile,p.sub]);if(!result.rowCount)throw Error();
+   socket.data.user=p.profile;socket.data.max=await unlocked(p.profile);socket.data.cosmetic=(await pool().query('select cosmetic_id from bestie.player_inventory where user_id=$1 and is_equipped limit 1',[p.profile])).rows[0]?.cosmetic_id;
+   await pool().query('delete from bestie.consumed_tickets where expires_at<now()');next()}catch{next(Error('Account session could not be verified. Sign in again or retry.'))}});
   function emit(r: Room) {
+    record(r);
+    r.v.maxLevel=Math.min(36,...r.slots.map(s=>s.max));
     r.slots.forEach((s, i) => {
       if (s.socket)
         io.to(s.socket).emit("state", {
           ...r.v,
+          board:personalBoard(r.v,i),
           sequence: i === 0 ? r.v.sequence : [],
           maze: i === 0 ? r.v.maze : [],
         });
     });
   }
   function remove(r: Room, i: number) {
+    if(r.v.phase==="game")record(r,true);
     r.slots.splice(i, 1);
     r.v.players.splice(i, 1);
     if (!r.slots.length) {
@@ -77,7 +102,7 @@ export function makeServer() {
       const token = randomBytes(24).toString("hex");
       r.slots.push({
         id,
-        token,
+        token,user:socket.data.user??null,max:socket.data.max??1,
         socket: socket.id,
         loaded: -1,
         last: 0,
@@ -85,6 +110,7 @@ export function makeServer() {
       });
       r.v.players.push({
         id,
+        cosmetic:socket.data.cosmetic,
         name: p.name.trim().slice(0, 18),
         color: /^#[0-9a-f]{6}$/i.test(p.color) ? p.color : "#ff9db4",
         shape: p.shape === "Sprout" ? "Sprout" : "Bunny",
@@ -112,7 +138,7 @@ export function makeServer() {
       } while (rooms.has(code));
       enter(
         {
-          slots: [],
+          session:randomUUID(),attempt:"",recorded:-1,started:"",campaignStart:"",originalHost:null,slots: [],
           v: {
             code,
             host: "",
@@ -149,7 +175,7 @@ export function makeServer() {
     socket.on("join", (d, ack) => {
       if (typeof ack !== "function") return;
       const r = rooms.get(String(d?.code).toUpperCase());
-      if (room || !r || r.slots.length >= 2)
+      if (room || !r || r.slots.length >= 2 || (socket.data.user && r.slots.some(s=>s.user===socket.data.user)))
         return ack({
           error: room
             ? "Already in a room."
@@ -163,7 +189,7 @@ export function makeServer() {
       if (typeof ack !== "function") return;
       const r = rooms.get(d?.code),
         s = r?.slots.find((s) => s.token === d.token);
-      if (room || !r || !s || s.socket)
+      if (room || !r || !s || s.socket || s.user!==(socket.data.user??null))
         return ack({ error: "This seat is unavailable." });
       room = r;
       id = s.id;
@@ -185,7 +211,9 @@ export function makeServer() {
       if (cmd === "ready" && v.phase === "lobby")
         v.players[i].ready = !v.players[i].ready;
       else if (id === v.host) {
-        if (cmd === "lobby") {
+        if(typeof cmd==="string"&&cmd.startsWith("level:")&&v.phase==="lobby"){const n=Number(cmd.slice(6));if(Number.isInteger(n)&&n>=1&&n<=Math.min(...r.slots.map(s=>s.max))){v.level=n;v.players.forEach(p=>p.ready=false)}else socket.emit("notice","Both friends must unlock this level.");}
+        else if (cmd === "lobby") {
+          if(v.phase==="game")record(r,true);
           v.phase = "lobby";
           v.players.forEach((p) => (p.ready = false));
         } else if (v.players.length === 2 && v.players.every((p) => p.online)) {
@@ -196,16 +224,16 @@ export function makeServer() {
           ) {
             r.slots.forEach((s) => (s.input = { move: 0, jump: false }));
             v.history = [];
-            start(v, 0);
+            r.session=randomUUID();r.campaignStart=new Date().toISOString();r.originalHost=r.slots[i].user;begin(r,Math.min(v.level??1,...r.slots.map(s=>s.max)));
           } else if (
             v.phase === "results" &&
             !v.outro &&
             (cmd === "again" ||
-              (cmd === "next" && v.mission < 5 && v.history.at(-1)?.win))
+              (cmd === "next" && (v.level??1)<Math.min(36,...r.slots.map(s=>s.max)) && v.history.at(-1)?.win))
           ) {
             r.slots.forEach((s) => (s.input = { move: 0, jump: false }));
             if (cmd === "again") v.history.pop();
-            start(v, v.mission + (cmd === "next" ? 1 : 0));
+            begin(r,(v.level??1)+(cmd==="next"?1:0));
           } else if (cmd === "pause" && v.phase === "game") {
             v.paused = !v.paused;
             r.slots.forEach((s) => (s.input = { move: 0, jump: false }));
@@ -318,7 +346,7 @@ export function makeServer() {
   return {
     http,
     close: () => {
-      clearInterval(timer);
+      queue.close();clearInterval(timer);
       io.close();
     },
   };

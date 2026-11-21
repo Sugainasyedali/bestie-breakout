@@ -80,3 +80,13 @@ The server emits individual `state` snapshots and `message` events. Reader-only 
 - `server/src/game.ts` is the authoritative simulation. `server/src/index.ts` owns room transport and lifecycle. The shared types are independent of both render and transport code.
 - Rooms and scores exist in memory. Restarting the Node service clears sessions. Persistent profiles could be added by saving completed results to a database in the finish path. The current release supports exactly two players per room.
 - Phaser fills the browser viewport and keeps puzzle coordinates consistent across clients. Portrait platforming uses a camera that follows the local player. The mission clock waits for both renderers to load and the shared introduction to finish. The game supports touch controls and preset chat. Voice calls are external. Temporary network interruptions pause play for both participants.
+
+## 3.0 cloud setup and verification status
+
+Copy the root .env.example to .env. Supply the existing Neon database, authentication, private profile bucket and optional realtime settings. Generate separate secrets of at least 32 characters for NEON_AUTH_COOKIE_SECRET and GAME_TICKET_SECRET. Run npm run db:setup using the direct database connection. Runtime queries use DATABASE_URL_POOLED. The root development launcher passes .env to both services.
+
+Configure Neon Auth allowed origins and password-reset callback URLs. Configure storage CORS for your frontend origin. Use a persistent SAVE_QUEUE_DIR volume on the game server so queued saves survive restarts. On separate hosting, configure server-only secrets in each service's environment settings.
+
+The added levels use cooperative tactical board puzzles with stage-specific controls. The original six missions retain their original gameplay. Accounts have profile editing, avatar upload, settings, achievements, cosmetic selection, recent sessions and public leaderboard opt-in.
+
+Verification still pending for live Neon authentication, storage, realtime and cloud persistence because credentials were unavailable in the development workspace. Cosmetic selection is stored but visual equipment integration remains pending. Saved audio/control preferences and the optional realtime subscription still need frontend wiring. Account deletion has a server endpoint but its confirmation interface remains pending. Treat this branch as an integration preview until those checks and integrations are completed.

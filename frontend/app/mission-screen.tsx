@@ -1,4 +1,7 @@
 "use client";
+import {catalog} from "../../shared/catalog";
+import {ChallengeControls} from "./challenge-controls";
+
 import { useRef, useEffect, useState, type ReactNode } from "react";
 import {
   Maximize,
@@ -184,6 +187,7 @@ export function MissionScreen({
   const host = v.host === id,
     idx = v.players.findIndex((p) => p.id === id),
     m = v.mission,
+    level=catalog[(v.level??m*6+1)-1],
     res = v.phase === "results",
     result = v.history.at(-1),
     win = !!result?.win;
@@ -284,9 +288,9 @@ export function MissionScreen({
             {v.players[0] && <Seat p={v.players[0]} num={1} />}
             <div className="missionPlate">
               <small>
-                <Flag size={13} /> MISSION 0{m + 1} / 06
+                <Flag size={13} /> LEVEL {level.id} / 36
               </small>
-              <h1>{missions[m][0]}</h1>
+              <h1>{level.title}</h1>
               <div className="dots">
                 {missions.map((_, i) => (
                   <i key={i} className={i <= m ? "on" : ""} />
@@ -322,6 +326,7 @@ export function MissionScreen({
             </div>
           )}
           <div className="station">
+            {v.board&&level.challenge?<ChallengeControls stage={level.challenge.stages[v.board.stage]} board={v.board} seat={idx} act={act} time={level.limit-v.time}/>:<>
             {role && (
               <div className="roleTag">
                 {role}
@@ -423,6 +428,7 @@ export function MissionScreen({
                 </div>
               </>
             )}
+            </>}
           </div>
           <div className="bottomLeft">
             <button className="chatToggle" onClick={() => togglePanel("chat")}>
@@ -494,7 +500,7 @@ export function MissionScreen({
                   </div>
                 </>
               ) : panel === "hint" ? (
-                <p>{missions[m][1]}</p>
+                <p>{level.objective}</p>
               ) : (
                 <>
                   <label>
@@ -552,9 +558,9 @@ export function MissionScreen({
                     ? "Reconnecting…"
                     : v.paused
                       ? "Game paused"
-                      : missions[m][0]}
+                      : level.title}
                 </h2>
-                <p>{v.paused ? "Take a breather, besties." : hooks[m]}</p>
+                <p>{v.paused ? "Take a breather, besties." : level.objective}</p>
                 {v.paused && host && (
                   <button onClick={() => command("pause")}>Resume game</button>
                 )}
@@ -576,9 +582,9 @@ export function MissionScreen({
               <small>
                 {win ? "MISSION COMPLETE" : "TIME RAN OUT"} · {m + 1} / 6
               </small>
-              <h2>{result.title}</h2>
+              <h2>{result.title}</h2><p>{v.saveStatus==="saved"?"Progress saved":v.saveStatus==="pending"?"Cloud save pending. Retrying…":"Guest progress lasts for this room."}</p>
               <p>
-                {missions[m][0]} · {locales[m]}
+                {level.title} · {locales[m]}
               </p>
               <div className="awardStars">
                 {[0, 1, 2].map((i) => (
@@ -609,7 +615,7 @@ export function MissionScreen({
               )}
               {host ? (
                 <div className="gameKeys">
-                  {win && m < 5 && (
+                  {win && level.id < (v.maxLevel??36) && (
                     <button className="next" onClick={() => command("next")}>
                       Next mission
                     </button>

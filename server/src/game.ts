@@ -1,14 +1,17 @@
+import {catalog} from "../../shared/catalog.js";
+import {initBoard,boardAction} from "../../shared/content/engine.js";
 import { randomInt } from "node:crypto";
 import { bridgeCenter, type Input, type View } from "../../shared/model.js";
 export const limits = [90, 100, 80, 90, 100, 60];
-export function start(v: View, mission: number) {
+export function start(v: View, mission: number,level=mission*6+1) {
   Object.assign(v, {
     mission,
     round: (v.round || 0) + 1,
     intro: 1.8,
     outro: 0,
     phase: "game",
-    time: limits[mission],
+    level,board:catalog[level-1].challenge?initBoard(catalog[level-1].challenge!.stages[0],0):undefined,saveStatus:undefined,
+    time: catalog[level-1].limit,
     progress: 0,
     mistakes: 0,
     correct: 0,
@@ -49,14 +52,14 @@ function roll(n: number) {
 }
 export function finish(v: View, win: boolean) {
   if (v.phase !== "game") return;
-  const seconds = Math.round(limits[v.mission] - v.time);
+  const seconds = Math.round((catalog[(v.level??(v.mission*6+1))-1].limit) - v.time);
   const score = Math.max(
     0,
     Math.min(
       100,
       (win ? 60 : 10) +
         Math.min(30, v.correct * 10) +
-        Math.round((10 * v.time) / limits[v.mission]) -
+        Math.round((10 * v.time) / (catalog[(v.level??(v.mission*6+1))-1].limit)) -
         v.mistakes * 4,
     ),
   );
@@ -81,6 +84,8 @@ export function finish(v: View, win: boolean) {
 }
 export function action(v: View, i: number, n: number) {
   if (v.phase !== "game" || v.paused || !Number.isInteger(n)) return;
+  if(v.board && v.level){const ch=catalog[v.level-1].challenge!,b=v.board;const verdict=boardAction(ch.stages[b.stage],b,i,n,ch.limit-v.time);
+ if(verdict==="miss")v.mistakes++;if(verdict==="done"){v.correct++;v.progress++;if(b.stage+1===ch.stages.length)finish(v,true);else v.board=initBoard(ch.stages[b.stage+1],b.stage+1)}return}
   const p = v.players[i];
   switch (v.mission) {
     case 0:
@@ -143,9 +148,10 @@ export function tick(v: View, inputs: Input[], dt: number) {
     return;
   v.time = Math.max(0, v.time - dt);
   if (!v.time) {
-    finish(v, v.mission === 5 && v.progress > 0);
+    finish(v, !v.board && v.mission === 5 && v.progress > 0);
     return;
   }
+  if(v.board)return;
   if (![0, 1, 4].includes(v.mission)) return;
   const wasOpen = v.gate;
   v.gate =

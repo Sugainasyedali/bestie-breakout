@@ -1,0 +1,3 @@
+"use client";
+import {useEffect,useState} from 'react';
+export default function Board(){const [sort,S]=useState('xp'),[rows,R]=useState<any[]>([]),[error,E]=useState('');useEffect(()=>{fetch('/api/player/leaderboard?sort='+sort).then(async r=>{const d=await r.json();if(!r.ok)throw Error(d.error);R(d)}).catch(e=>E(e.message))},[sort]);return <main className="wrap"><section className="panel"><a href="/">Home</a><h1>Bestie legends</h1><select value={sort} onChange={e=>S(e.target.value)}>{['xp','levels','stars','teamwork'].map(s=><option key={s}>{s}</option>)}</select><p>{error}</p>{rows.map((r,i)=><p key={i}>{i+1}. {r.name} · {r.value}</p>)}{!rows.length&&<p>No public scores yet. You can opt in from your account settings.</p>}</section></main>}
