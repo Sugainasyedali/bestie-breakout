@@ -1,0 +1,4 @@
+import {own,originCheck,failure,json,limit,Problem} from '../../../../../lib/api';import {upload,complete,eraseAvatar,readAvatar} from '../../../../../lib/storage';
+async function route(r:Request,c:{params:Promise<{action?:string[]}>}){try{originCheck(r);const {p}=await own();const a=(await c.params).action?.join('/')||'';if(r.method==='GET'&&!a)return json({url:await readAvatar(p.id,p.avatar_object_key)});limit('avatar:'+p.id,20);
+ if(r.method==='DELETE'&&!a){await eraseAvatar(p.id);return json({ok:true})}if(r.method==='POST'){const b=await r.json();if(a==='upload-url')return json(await upload(p.id,b.type,b.size));if(a==='complete')return json(await complete(p.id,b.key))}throw new Problem(404,'Unknown operation.')}catch(e){return failure(e)}}
+export {route as GET,route as POST,route as DELETE};

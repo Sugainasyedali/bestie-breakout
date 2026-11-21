@@ -1,0 +1,168 @@
+import type { Challenge } from "./engine.js";
+
+export const levels: Challenge[] = [
+  {
+    title: "Firefly Signals",
+    objective: "Guide your friend between the firefly lanterns. Trade the lantern at the bend and lead them out.",
+    limit: 95,
+    stages: [
+      {
+        mode: "route",
+        role: 1,
+        map: [
+          "###########",
+          "#AB..#....#",
+          "###.##.##.#",
+          "#...#..##.#",
+          "#.###.###.#",
+          "#.....#G..#",
+          "###########",
+        ],
+        hint: "The guide reads the lit trail. Call each turn before your friend reaches the next fork.",
+      },
+      {
+        mode: "route",
+        role: 0,
+        map: [
+          "###########",
+          "#AB#......#",
+          "#..#.####.#",
+          "##...#G.#.#",
+          "#.####..#.#",
+          "#.........#",
+          "###########",
+        ],
+        hint: "Swap guides at the lantern. Follow the bend around the hollow oak to the clearing.",
+      },
+    ],
+  },
+  {
+    title: "Echo Bridge",
+    objective: "Answer the hollow-log call, then cross the echo bridge while your partner wakes its planks.",
+    limit: 100,
+    stages: [
+      {
+        mode: "rhythm",
+        labels: ["Knock", "Chime", "Croak", "Hush"],
+        code: [0, 1, 0, 3, 2, 1],
+        map: ["#########", "#A.....B#", "#.##.##.#", "#...G...#", "#########"],
+        hint: "Take turns answering the hollow log. Call the sound on your beat so your partner can follow.",
+      },
+      {
+        mode: "build",
+        labels: ["Echo"],
+        role: 1,
+        map: [
+          "###########",
+          "#AB.+.#..G#",
+          "#####.#.#.#",
+          "#.....#.#.#",
+          "#.#####.#.#",
+          "#...+...#.#",
+          "###########",
+        ],
+        hint: "Guide: on the chime, press the arrow toward the gap beside your partner. Runner: step onto the lit plank before its echo fades.",
+      },
+    ],
+  },
+  {
+    title: "Mushroom Bounce",
+    objective: "Spring across two mushroom beds. Swap the spore controls when the first jumper lands.",
+    limit: 100,
+    stages: [
+      {
+        mode: "gravity",
+        labels: ["Bounce"],
+        role: 1,
+        map: [
+          "###########",
+          "#AB.~.#..G#",
+          "#####.#.#.#",
+          "#.....#.#.#",
+          "#.#####.#.#",
+          "#...~...#.#",
+          "###########",
+        ],
+        hint: "The guide primes a mushroom with Activate. The jumper steps toward it to spring to the next square.",
+      },
+      {
+        mode: "gravity",
+        labels: ["Bounce"],
+        role: 0,
+        map: [
+          "###########",
+          "#AB#G...#.#",
+          "#.~####.#.#",
+          "##....#.#.#",
+          "#####.#.#.#",
+          "#.....~.#.#",
+          "###########",
+        ],
+        hint: "Trade jobs at the blue mushroom. Reach the taller cap around the back of the roots.",
+      },
+    ],
+  },
+  {
+    title: "Potion Partners",
+    objective: "Brew moonberry cordial. Read the herbalist’s recipe to your partner, then swap jobs to finish the antidote.",
+    limit: 75,
+    stages: [
+      {
+        mode: "sequence",
+        role: 1,
+        labels: ["Moonberry", "Spore", "Honey", "Dew"],
+        code: [3, 0, 2, 1],
+        map: ["#########", "#A..#..B#", "#.#...#.#", "#...G...#", "#########"],
+        hint: "One of you can read the recipe. The other stirs the four ingredients into the base in order.",
+      },
+      {
+        mode: "sequence",
+        role: 0,
+        labels: ["Petal", "Sap", "Mint", "Fern"],
+        code: [2, 1, 2, 3, 0],
+        map: ["#########", "#B.#.#.A#", "#.......#", "#.##G##.#", "#########"],
+        hint: "Pass the spoon. Read back the finishing recipe and listen for the repeated ingredient.",
+      },
+    ],
+  },
+  {
+    title: "Forest Guardian",
+    objective: "Wake the stone guardian, deliver its seed, and call both halves of its ancient name.",
+    limit: 135,
+    stages: [
+      {
+        mode: "pads",
+        map: [
+          "###########",
+          "#A...#...b#",
+          "#.##.#.#..#",
+          "#.........#",
+          "#..#.##.#.#",
+          "#a...#...B#",
+          "###########",
+        ],
+        hint: "Find the two root seals. Both forest keepers must stand on their own seal together.",
+      },
+      {
+        mode: "cargo",
+        map: [
+          "###########",
+          "#.........#",
+          "#.A.......#",
+          "#.BC...G..#",
+          "#.....##..#",
+          "#.........#",
+          "###########",
+        ],
+        hint: "Bring the guardian’s seed down the open aisle. Coordinate each push toward the hollow.",
+      },
+      {
+        mode: "rhythm",
+        labels: ["Root", "Rain", "Sun", "Seed"],
+        code: [0, 1, 3, 2, 3, 0],
+        map: ["#########", "#A..#..B#", "#.#.G.#.#", "#.......#", "#########"],
+        hint: "Say the guardian’s name one beat at a time. Each of you carries half the chant.",
+      },
+    ],
+  },
+];

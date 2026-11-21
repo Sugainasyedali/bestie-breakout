@@ -1,0 +1,5 @@
+import {createHmac,randomUUID,timingSafeEqual} from 'node:crypto';
+const secret=()=>{const s=process.env.GAME_TICKET_SECRET;if(!s||s.length<32)throw Error('Set GAME_TICKET_SECRET (32+ characters).');return s};
+export function issueTicket(subject:string,profile:string){const data=Buffer.from(JSON.stringify({sub:subject,profile,jti:randomUUID(),exp:Date.now()+45000,aud:'bestie-game'})).toString('base64url');return data+'.'+createHmac('sha256',secret()).update(data).digest('base64url')}
+export function verifyTicket(token:string){if(typeof token!=='string'||token.length>1800)throw Error('Invalid game ticket');const [data,mac,...rest]=token.split('.');const expected=createHmac('sha256',secret()).update(data).digest();const signed=Buffer.from(mac||'','base64url');if(rest.length||signed.length!==expected.length||!timingSafeEqual(signed,expected))throw Error('Invalid game ticket');
+ const p=JSON.parse(Buffer.from(data,'base64url').toString()) as {sub:string;profile:string;jti:string;exp:number;aud:string};if(!p.sub||!p.profile||!p.jti||p.aud!=='bestie-game'||!Number.isFinite(p.exp)||Date.now()>=p.exp||p.exp>Date.now()+46000)throw Error('Expired game ticket');return p}

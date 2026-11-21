@@ -1,4 +1,7 @@
 "use client";
+import {catalog} from "../../shared/catalog";
+import {drawChallenge} from "./challenge-board";
+
 import { useEffect, useRef } from "react";
 import {
   bridgeCenter,
@@ -251,6 +254,7 @@ export function Arena(props: Props) {
               g.fillStyle(ink, 0.16).fillEllipse(xx + 7, 298, 8, 4);
             }
           };
+          if(v.board&&v.level){drawChallenge(g,v.board,catalog[v.level-1].challenge!.stages[v.board.stage],m,this.word.bind(this),clock)}else {
           if (m === 4) {
             land(-12, 272);
             land(540, 272);
@@ -414,6 +418,7 @@ export function Arena(props: Props) {
                 6,
                 12,
               );
+          }
           }
           if (old && old !== v) {
             if (v.mistakes > old.mistakes) {

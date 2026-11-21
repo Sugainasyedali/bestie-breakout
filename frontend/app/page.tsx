@@ -78,7 +78,7 @@ export default function Home() {
       try {
         P(JSON.parse(saved));
       } catch {}
-    if (sessionStorage.getItem("bestie-seat")) S("setup");
+    if (sessionStorage.getItem("bestie-seat")||location.search) S("setup");
   }, []);
   useEffect(() => {
     if (screen === "home") return;
@@ -125,6 +125,8 @@ export default function Home() {
         );
       previous.current = next;
       V(next);
+      const desired=Number(new URLSearchParams(location.search).get('level'));if(next.phase==='lobby'&&next.host===sessionStorage.getItem('bestie-id')&&desired&&next.level!==desired){s.emit('command','level:'+desired);history.replaceState(null,'','/')}
+
     });
     s.on("message", (m) => {
       M(m.id + "|" + m.text);
@@ -132,9 +134,11 @@ export default function Home() {
       timer.current = setTimeout(() => M(""), 3200);
       arcadeAudio.cue("emote");
     });
-    s.connect();
+    let cancelled=false;
+    async function connect(){try{const session=await fetch('/api/player/session');const info=await session.json();if(info.signedIn){const r=await fetch('/api/player/ticket',{method:'POST'});const b=await r.json();if(!r.ok)throw Error(b.error);s.auth={ticket:b.ticket}}if(!cancelled)s.connect()}catch(err){E(String(err))}}
+    void connect();
     return () => {
-      clearTimeout(timer.current);
+      cancelled=true;clearTimeout(timer.current);
       s.disconnect();
       sock.current = null;
     };
@@ -147,7 +151,7 @@ export default function Home() {
     localStorage.setItem("bestie-profile", JSON.stringify(profile));
     const ack: Ack = (r) => {
       if (r.error) return E(r.error);
-      I(r.id!);
+      I(r.id!);sessionStorage.setItem("bestie-id",r.id!);
       sessionStorage.setItem(
         "bestie-seat",
         JSON.stringify({ code: r.code, token: r.token }),
@@ -210,7 +214,7 @@ export default function Home() {
             </span>{" "}
             BESTIE BREAKOUT
           </button>
-          <div className="navright">
+          <div className="navright"><a href="/map">Adventure</a><a href="/account">Account</a>
             <span className="arcade">
               <i /> CO-OP ARCADE
             </span>
@@ -411,6 +415,7 @@ export default function Home() {
                 >
                   {v.code} {copied ? <Check /> : <Copy />}
                 </button>
+                <label>Campaign level<select value={v.level??1} disabled={!isHost} onChange={e=>command('level:'+e.target.value)}>{Array.from({length:v.maxLevel??1},(_,i)=><option key={i} value={i+1}>Level {i+1}</option>)}</select></label>
                 <div className="slots">
                   {[0, 1].map((i) => {
                     const p = v.players[i];
