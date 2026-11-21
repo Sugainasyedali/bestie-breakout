@@ -28,7 +28,7 @@ Both packages also accept `npm run dev` from their own directories. The frontend
 1. Open two independent browser windows (a private window works). Open both from the address bar so their session storage starts independently.
 2. Choose **Play now** and customize each guest. Create a private room in one window and join with the six-character code in the other.
 3. Both players select **Ready up**. The host starts the game.
-4. Use A/D or arrow keys to move, W/Space to jump, E to use mechanisms, or the touch buttons below the canvas. The host can pause with Escape. Sound starts muted.
+4. Use A/D or arrow keys to move, W/Space to jump, E to use mechanisms, or the touch buttons below the canvas. The host can pause with Escape. Sound starts muted. Open the in-game settings for independent music and effects switches and volume. The fullscreen control uses the browser’s fullscreen mode when available.
 5. Use the quick-chat menu for callouts, directions, fruits, and pizza ingredients. Both friends see emoji reactions. Each mission result offers host-controlled replay, progression after success, or return to lobby.
 
 | Mission | How to win |
@@ -79,4 +79,4 @@ The server emits individual `state` snapshots and `message` events. Reader-only 
 - `frontend/app` contains the React menus, session UI, Phaser canvas, sound, and styles. Original mission postcards and hero art live under `frontend/public/art`.
 - `server/src/game.ts` is the authoritative simulation. `server/src/index.ts` owns room transport and lifecycle. The shared types are independent of both render and transport code.
 - Rooms and scores exist in memory. Restarting the Node service clears sessions. Persistent profiles could be added by saving completed results to a database in the finish path. The current release supports exactly two players per room.
-- Missions fit on one fixed-aspect stage. The game supports touch controls and preset chat. Voice calls are external. Temporary network interruptions pause play for both participants.
+- Phaser fills the browser viewport and keeps puzzle coordinates consistent across clients. Portrait platforming uses a camera that follows the local player. The mission clock waits for both renderers to load and the shared introduction to finish. The game supports touch controls and preset chat. Voice calls are external. Temporary network interruptions pause play for both participants.

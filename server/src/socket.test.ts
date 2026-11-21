@@ -43,6 +43,12 @@ test("three independent clients exercise room lifecycle and play through first m
     a.emit("command", "start");
     await until(() => states[1].phase === "game");
     assert.equal(states[0].mission, states[1].mission);
+    a.emit("loaded", states[0].round);
+    await sleep(150);
+    assert.equal(states[0].time, 90);
+    assert.equal(states[0].intro, 1.8);
+    b.emit("loaded", states[1].round);
+    await until(() => states[0].intro === 0 && states[1].intro === 0);
     a.emit("input", { move: 1 });
     await until(() => states[0].players[0].x > 211);
     a.emit("input", { move: 0 });
@@ -60,6 +66,8 @@ test("three independent clients exercise room lifecycle and play through first m
       () => states[1].phase === "results" && states[0].phase === "results",
     );
     assert.deepEqual(states[0].history, states[1].history);
+    assert.ok(states[0].outro > 0);
+    await until(() => states[0].outro === 0 && states[1].outro === 0);
     a.emit("command", "again");
     await until(() => states[1].phase === "game");
     assert.equal(states[1].history.length, 0);

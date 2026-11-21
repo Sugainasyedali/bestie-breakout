@@ -4,6 +4,9 @@ export const limits = [90, 100, 80, 90, 100, 60];
 export function start(v: View, mission: number) {
   Object.assign(v, {
     mission,
+    round: (v.round || 0) + 1,
+    intro: 1.8,
+    outro: 0,
     phase: "game",
     time: limits[mission],
     progress: 0,
@@ -73,6 +76,7 @@ export function finish(v: View, win: boolean) {
           ? "Somehow We Survived"
           : "Certified Chaos Duo",
   });
+  v.outro = 1.15;
   v.phase = "results";
 }
 export function action(v: View, i: number, n: number) {

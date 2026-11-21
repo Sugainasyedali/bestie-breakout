@@ -18,7 +18,8 @@ import {
   Pause,
   LogOut,
 } from "lucide-react";
-import { Arena } from "./arena";
+import { MissionScreen } from "./mission-screen";
+import { arcadeAudio } from "./sound";
 import {
   missions,
   chats,
@@ -62,50 +63,15 @@ export default function Home() {
     [sound, U] = useState(false),
     [msg, M] = useState(""),
     [copied, Cp] = useState(false);
-  const touchDirection = useRef(0),
-    previous = useRef<View | null>(null);
-  const sock = useRef<Socket<ServerEvents, ClientEvents> | null>(null),
-    soundRef = useRef(false),
-    ctx = useRef<AudioContext | null>(null),
+  const previous = useRef<View | null>(null),
+    sock = useRef<Socket<ServerEvents, ClientEvents> | null>(null),
     timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  function beep(n: number) {
-    if (!soundRef.current) return;
-    const a = ctx.current;
-    if (!a) return;
-    const osc = a.createOscillator(),
-      gain = a.createGain();
-    osc.type = "triangle";
-    osc.frequency.setValueAtTime(n, a.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(n * 0.75, a.currentTime + 0.12);
-    gain.gain.setValueAtTime(0.045, a.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, a.currentTime + 0.16);
-    osc.connect(gain);
-    gain.connect(a.destination);
-    osc.start();
-    osc.stop(a.currentTime + 0.17);
-  }
   function toggle() {
-    const b = !sound;
-    U(b);
-    soundRef.current = b;
-    if (b) {
-      ctx.current ??= new AudioContext();
-      void ctx.current.resume();
-      beep(600);
-    }
+    arcadeAudio.unlock();
+    arcadeAudio.setEffects(!sound);
+    U(!sound);
+    arcadeAudio.cue("click");
   }
-  useEffect(() => {
-    if (!sound || v?.phase !== "game" || v.paused) return;
-    let j = 0;
-    const t = setInterval(
-      () => beep([196, 247, 294, 247, 220, 262, 330, 262][j++ % 8]),
-      740,
-    );
-    return () => clearInterval(t);
-  }, [sound, v?.phase, v?.paused]);
-  useEffect(() => {
-    if (v?.phase === "results") beep(v.history.at(-1)?.win ? 880 : 150);
-  }, [v?.phase]);
   useEffect(() => {
     const saved = localStorage.getItem("bestie-profile");
     if (saved)
@@ -142,11 +108,21 @@ export default function Home() {
     s.on("state", (next) => {
       const old = previous.current;
       if (old?.phase === "game" && next.phase === "game") {
-        if (next.mistakes > old.mistakes) beep(130);
-        else if (next.keyTaken && !old.keyTaken) beep(920);
-        else if (next.gate && !old.gate) beep(530);
-        else if (next.correct > old.correct) beep(720);
+        if (next.mistakes > old.mistakes) arcadeAudio.cue("fail");
+        else if (next.keyTaken && !old.keyTaken) arcadeAudio.cue("collect");
+        else if (next.gate && !old.gate) arcadeAudio.cue("door");
+        else if (next.correct > old.correct) arcadeAudio.cue("correct");
       }
+      if (old?.intro && !next.intro && next.phase === "game")
+        arcadeAudio.cue("start");
+      if (old?.phase === "game" && next.phase === "results")
+        arcadeAudio.cue(
+          next.history.at(-1)?.win
+            ? next.mission === 5
+              ? "victory"
+              : "complete"
+            : "fail",
+        );
       previous.current = next;
       V(next);
     });
@@ -154,7 +130,7 @@ export default function Home() {
       M(m.id + "|" + m.text);
       clearTimeout(timer.current);
       timer.current = setTimeout(() => M(""), 3200);
-      beep(560);
+      arcadeAudio.cue("emote");
     });
     s.connect();
     return () => {
@@ -183,7 +159,7 @@ export default function Home() {
   const command = (c: string) => sock.current?.emit("command", c),
     act = (n: number) => {
       sock.current?.emit("action", n);
-      beep(380);
+      arcadeAudio.cue("switch");
     },
     send = (p: Input) => sock.current?.emit("input", p),
     isHost = id === v?.host,
@@ -196,6 +172,23 @@ export default function Home() {
     S("home");
     E("");
   }
+  if (v && v.phase !== "lobby")
+    return (
+      <MissionScreen
+        v={v}
+        id={id}
+        online={online}
+        msg={msg}
+        command={command}
+        send={send}
+        act={act}
+        chat={(m) => sock.current?.emit("chat", m)}
+        loaded={(round) => sock.current?.emit("loaded", round)}
+        leave={leave}
+        effects={sound}
+        toggleEffects={toggle}
+      />
+    );
   const how = (
     <section id="how" className="how">
       <div>
@@ -465,253 +458,7 @@ export default function Home() {
                   )}
                 </div>
               </section>
-            ) : v.phase === "game" ? (
-              <section className="panel play">
-                <div className="sectionTop">
-                  <div>
-                    <span className="kicker">
-                      MISSION 0{v.mission + 1} / 06
-                    </span>
-                    <h2>{missions[v.mission][0]}</h2>
-                  </div>
-                  <b className="clock">{Math.ceil(v.time)}s</b>
-                </div>
-                <p>{missions[v.mission][1]}</p>
-                <div className="gamehud">
-                  {v.players.map((p) => (
-                    <span key={p.id}>
-                      {p.online ? "●" : "○"} {p.name}
-                    </span>
-                  ))}
-                  {isHost && (
-                    <button onClick={() => command("pause")}>
-                      <Pause size={14} />
-                      {v.paused ? "Resume" : "Pause"}
-                    </button>
-                  )}
-                </div>
-                <Arena
-                  v={v}
-                  id={id}
-                  send={send}
-                  act={() => act(-1)}
-                  pause={() => {
-                    if (isHost) command("pause");
-                  }}
-                  sfx={beep}
-                  emote={
-                    msg
-                      ? v.players.find((p) => p.id === msg.split("|")[0])
-                          ?.name +
-                        ": " +
-                        msg.split("|")[1]
-                      : ""
-                  }
-                />
-                {(!online || v.paused || v.players.some((p) => !p.online)) && (
-                  <p role="alert">
-                    {v.paused ? "Game paused" : "Waiting for reconnection…"}
-                  </p>
-                )}
-                {[0, 1, 4].includes(v.mission) ? (
-                  <>
-                    <div className="buttons touch">
-                      {[-1, 1].map((n) => (
-                        <button
-                          key={n}
-                          onPointerDown={(e) => {
-                            e.currentTarget.setPointerCapture(e.pointerId);
-                            touchDirection.current = n;
-                            send({ move: n, jump: false });
-                          }}
-                          onPointerUp={() => {
-                            touchDirection.current = 0;
-                            send({ move: 0, jump: false });
-                          }}
-                          onPointerCancel={() => {
-                            touchDirection.current = 0;
-                            send({ move: 0, jump: false });
-                          }}
-                        >
-                          {n < 0 ? "Left" : "Right"}
-                        </button>
-                      ))}
-                      <button
-                        onClick={() => {
-                          send({ move: touchDirection.current, jump: true });
-                          beep(410);
-                        }}
-                      >
-                        Jump
-                      </button>
-                      {v.mission !== 1 && (
-                        <button onClick={() => act(-1)}>Interact</button>
-                      )}
-                    </div>
-                    <small>
-                      A / D or arrows to move · W / Space to jump · E to
-                      interact · Esc to pause
-                    </small>
-                    {v.mission === 4 && (
-                      <p>
-                        {idx === v.runner
-                          ? "You are crossing."
-                          : "You control the bridge. Press E to toggle it."}
-                      </p>
-                    )}
-                  </>
-                ) : v.mission === 2 ? (
-                  <>
-                    <h3>
-                      {idx === 0
-                        ? "Guide your friend along the gold path"
-                        : "Follow your scout’s directions"}
-                    </h3>
-                    {idx === 1 && (
-                      <div className="buttons">
-                        {directions.map((s, i) => (
-                          <button key={s} onClick={() => act(i)}>
-                            {s}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </>
-                ) : v.mission === 3 ? (
-                  <>
-                    <h3>
-                      {idx === 0
-                        ? "Read the secret code"
-                        : "Enter your friend’s code"}{" "}
-                      · {v.progress} entered
-                    </h3>
-                    <div className="buttons">
-                      {idx === 0
-                        ? v.sequence.map((n, i) => <b key={i}>{fruit[n]}</b>)
-                        : fruit.map((s, i) => (
-                            <button key={s} onClick={() => act(i)}>
-                              {s}
-                            </button>
-                          ))}
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <h3>
-                      Order · {v.recipe.map((n) => toppings[n]).join(" + ")}
-                    </h3>
-                    <p>
-                      {idx === 0
-                        ? "Pick ingredients for the chef"
-                        : "Add ingredients to the pizza"}{" "}
-                      · Served {v.progress}
-                    </p>
-                    <div className="buttons">
-                      {toppings.map((s, i) => (
-                        <button key={s} onClick={() => act(i)}>
-                          {s} ({v.stock[i]})
-                        </button>
-                      ))}
-                      {idx === 1 && (
-                        <button onClick={() => act(4)}>Serve pizza</button>
-                      )}
-                    </div>
-                    <p>
-                      Pizza ·{" "}
-                      {v.tray.map((n) => toppings[n]).join(", ") || "Empty"}
-                    </p>
-                  </>
-                )}
-                <div className="chat">
-                  <label>
-                    Quick chat{" "}
-                    <select
-                      value=""
-                      onChange={(e) =>
-                        sock.current?.emit("chat", e.target.value)
-                      }
-                    >
-                      <option value="">Send a message…</option>
-                      {chats.map((s) => (
-                        <option key={s}>{s}</option>
-                      ))}
-                    </select>
-                  </label>
-                  {["😂", "😭", "🎉", "🤦", "😡", "💃", "🤔"].map((s) => (
-                    <button
-                      key={s}
-                      onClick={() => sock.current?.emit("chat", s)}
-                    >
-                      {s}
-                    </button>
-                  ))}
-                </div>
-              </section>
-            ) : (
-              <section className="panel result">
-                <span className="kicker">
-                  {v.mission === 5 ? "CAMPAIGN RESULTS" : "MISSION RESULTS"}
-                </span>
-                <div className="stars">
-                  {[0, 1, 2].map((n) => (
-                    <Star
-                      key={n}
-                      fill={n < v.history.at(-1)!.stars ? "#ffd260" : "none"}
-                    />
-                  ))}
-                </div>
-                <h1>
-                  {v.history.at(-1)?.title}
-                  <span>!</span>
-                </h1>
-                <p>
-                  {v.history.at(-1)?.win ? "Mission complete" : "Time ran out"}{" "}
-                  · {missions[v.mission][0]}
-                </p>
-                <div className="celebrate">
-                  {v.players.map((p) => (
-                    <Avatar key={p.id} p={p} />
-                  ))}
-                </div>
-                <div className="stats">
-                  {Object.entries({
-                    Seconds: v.history.at(-1)?.seconds,
-                    Mistakes: v.mistakes,
-                    Teamwork: v.history.at(-1)?.score,
-                  }).map(([k, n]) => (
-                    <div key={k}>
-                      <strong>{n}</strong>
-                      {k}
-                    </div>
-                  ))}
-                </div>
-                {v.mission === 5 && (
-                  <p>
-                    Team total · {v.history.reduce((a, r) => a + r.stars, 0)} /
-                    18 stars · {v.history.reduce((a, r) => a + r.seconds, 0)}{" "}
-                    seconds
-                  </p>
-                )}
-                {isHost ? (
-                  <div className="buttons">
-                    <button onClick={() => command("again")}>Play again</button>
-                    {v.mission < 5 && v.history.at(-1)?.win && (
-                      <button
-                        className="primary"
-                        onClick={() => command("next")}
-                      >
-                        Next mission <ChevronRight size={16} />
-                      </button>
-                    )}
-                    <button onClick={() => command("lobby")}>
-                      Return to lobby
-                    </button>
-                  </div>
-                ) : (
-                  <p>Waiting for the host to choose the next mission.</p>
-                )}
-              </section>
-            )}
+            ) : null}
             {error && <p>{error}</p>}
             {!online && <p>Reconnecting to your room…</p>}
           </>

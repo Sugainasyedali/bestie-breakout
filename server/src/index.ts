@@ -19,6 +19,7 @@ type Room = {
     id: string;
     token: string;
     socket: string;
+    loaded: number;
     last: number;
     input: Input;
   }[];
@@ -78,6 +79,7 @@ export function makeServer() {
         id,
         token,
         socket: socket.id,
+        loaded: -1,
         last: 0,
         input: { move: 0, jump: false },
       });
@@ -92,6 +94,7 @@ export function makeServer() {
         x: 80,
         y: 278,
         vy: 0,
+        gestures: 0,
         ground: true,
         dir: 1,
       });
@@ -116,6 +119,9 @@ export function makeServer() {
             players: [],
             phase: "lobby",
             mission: 0,
+            round: 0,
+            intro: 0,
+            outro: 0,
             time: 0,
             progress: 0,
             mistakes: 0,
@@ -193,21 +199,36 @@ export function makeServer() {
             start(v, 0);
           } else if (
             v.phase === "results" &&
+            !v.outro &&
             (cmd === "again" ||
               (cmd === "next" && v.mission < 5 && v.history.at(-1)?.win))
           ) {
             r.slots.forEach((s) => (s.input = { move: 0, jump: false }));
             if (cmd === "again") v.history.pop();
             start(v, v.mission + (cmd === "next" ? 1 : 0));
-          } else if (cmd === "pause" && v.phase === "game")
+          } else if (cmd === "pause" && v.phase === "game") {
             v.paused = !v.paused;
+            r.slots.forEach((s) => (s.input = { move: 0, jump: false }));
+          }
         }
       }
       emit(r);
     });
+    socket.on("loaded", (round) => {
+      const seat = room?.slots.find((s) => s.id === id);
+      if (seat && room?.v.phase === "game" && room.v.round === round)
+        seat.loaded = round;
+    });
     socket.on("input", (p) => {
       const s = room?.slots.find((s) => s.id === id);
-      if (s && room?.v.phase === "game" && p && [-1, 0, 1].includes(p.move)) {
+      if (
+        s &&
+        room?.v.phase === "game" &&
+        !room.v.intro &&
+        !room.v.paused &&
+        p &&
+        [-1, 0, 1].includes(p.move)
+      ) {
         s.input.move = p.move;
         s.input.jump ||= p.jump === true;
       }
@@ -215,10 +236,21 @@ export function makeServer() {
     socket.on("action", (n) => {
       if (
         room &&
+        !room.v.intro &&
         Date.now() - lastAction > 100 &&
         room.v.players.every((p) => p.online)
       ) {
+        if (
+          room.v.phase !== "game" ||
+          room.v.paused ||
+          !Number.isInteger(n) ||
+          n < -1 ||
+          n > 4
+        )
+          return;
         lastAction = Date.now();
+        const actor = room.v.players.find((p) => p.id === id);
+        if (actor) actor.gestures++;
         action(
           room.v,
           room.slots.findIndex((s) => s.id === id),
@@ -246,6 +278,7 @@ export function makeServer() {
       if (i < 0) return;
       Object.assign(r.slots[i], {
         socket: "",
+        loaded: -1,
         last: Date.now(),
         input: { move: 0, jump: false },
       });
@@ -263,12 +296,22 @@ export function makeServer() {
         if (!r.slots[i].socket && Date.now() - r.slots[i].last > 120000)
           remove(r, i);
       if (r.v.phase === "game") {
-        tick(
-          r.v,
-          r.slots.map((s) => s.input),
-          1 / 40,
-        );
+        if (r.v.intro > 0) {
+          if (
+            !r.v.paused &&
+            r.slots.every((s) => s.socket && s.loaded === r.v.round)
+          )
+            r.v.intro = Math.max(0, r.v.intro - 0.025);
+        } else
+          tick(
+            r.v,
+            r.slots.map((s) => s.input),
+            1 / 40,
+          );
         if (frame % 3 === 0 || r.v.phase !== "game") emit(r);
+      } else if (r.v.phase === "results" && r.v.outro > 0) {
+        r.v.outro = Math.max(0, r.v.outro - 0.025);
+        if (r.v.outro === 0) emit(r);
       }
     }
   }, 25);

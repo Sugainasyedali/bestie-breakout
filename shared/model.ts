@@ -67,6 +67,7 @@ export type Player = Profile & {
   x: number;
   y: number;
   vy: number;
+  gestures: number;
   ground: boolean;
   dir: number;
 };
@@ -86,6 +87,9 @@ export type View = {
   players: Player[];
   phase: "lobby" | "game" | "results";
   mission: number;
+  round: number;
+  intro: number;
+  outro: number;
   paused: boolean;
   time: number;
   progress: number;
@@ -117,6 +121,7 @@ export interface ClientEvents {
   join: (p: { code: string; profile: Profile }, a: Ack) => void;
   restore: (p: { code: string; token: string }, a: Ack) => void;
   command: (s: string) => void;
+  loaded: (round: number) => void;
   input: (p: Input) => void;
   action: (n: number) => void;
   chat: (s: string) => void;
