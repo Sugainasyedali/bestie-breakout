@@ -19,9 +19,9 @@ export function boardAction(s:Stage,b:Board,i:number,n:number,elapsed:number):Ve
  if(n===4)return 'idle';
  // Each part needs a clue/ingredient from one seat, confirmed at the other.
  const sender=mode==='rhythm'?b.step%2:guide;
- if(i===sender){b.sent=n;return 'move'}
+ if(i===sender){b.sent=n;b.beat=elapsed;return 'move'}
  if(b.sent<0)return 'idle';
- const ok=n===b.code[b.step]&&n===b.sent&&(mode!=='rhythm'||Math.floor(elapsed*2)%4!==3);
+ const ok=(mode!=='rhythm'||elapsed-b.beat<=1.2)&&n===b.code[b.step]&&n===b.sent&&(mode!=='rhythm'||Math.floor(elapsed*2)%4!==3);
  b.sent=-1;if(!ok){b.step=0;return 'miss'}return ++b.step===b.code.length?'done':'move';
  }
  if(mode==='mirrors'){
@@ -31,10 +31,10 @@ export function boardAction(s:Stage,b:Board,i:number,n:number,elapsed:number):Ve
  b.both|=1<<i;b.beam=ray(b);return 'move'
  }
  const freight=['cargo','magnet','conveyor'].includes(mode);
- if(freight&&n===4){b.armed=i;return 'move'}
+ if(freight&&n===4){b.armed=i;b.beat=elapsed;return 'move'}
  if(!freight&&mode!=='pads'&&i===guide){
  if(n===4){if(mode==='build')return 'idle';b.switchOn=!b.switchOn;b.both|=1<<guide;return 'move'}
- if(mode==='route'){b.held=n;b.both|=1<<guide;return 'move'}
+ if(mode==='route'){b.held=n;b.beat=elapsed;b.both|=1<<guide;return 'move'}
  if(mode==='build'){const p=neighbor(b,b.actors[runner],n);if(cellAt(b,p)==='+'&&!b.built.includes(p)){b.built.push(p);b.both|=1<<guide;return 'move'}}
  return 'idle';
  }
@@ -43,10 +43,12 @@ export function boardAction(s:Stage,b:Board,i:number,n:number,elapsed:number):Ve
  const p=neighbor(b,b.actors[i],dir),c=cellAt(b,p);
  if(c==='#')return 'idle';
  if(mode==='route'&&(b.held!==dir))return 'idle';
+ if(mode==='route'&&s.labels?.includes('Timed')&&elapsed-b.beat>1.2){b.held=-1;return 'miss'}
  if((c==='*'||c==='+')&&!b.switchOn&&!b.built.includes(p))return 'idle';
  if(c==='~'&&!b.switchOn){b.actors[i]=s.map.join('').indexOf(i?'B':'A');return 'miss'}
  if(freight&&p===b.box){
  if(b.armed!==1-i)return 'idle';
+ if(s.labels?.includes('Timed')&&elapsed-b.beat>1.2){b.armed=-1;return 'miss'}
  let dest=neighbor(b,p,dir);if(cellAt(b,dest)==='#')return 'idle';
  if(cellAt(b,dest)==='~'){b.box=s.map.join('').indexOf('C');b.armed=-1;return 'miss'}
  if(mode==='conveyor'&&'><'.includes(cellAt(b,dest))){const slide=neighbor(b,dest,cellAt(b,dest)==='>'?1:3);if(cellAt(b,slide)!=='#')dest=slide}
@@ -54,9 +56,14 @@ export function boardAction(s:Stage,b:Board,i:number,n:number,elapsed:number):Ve
  }
  let landing=p;
  if(mode==='wind' && c==='~' && b.switchOn){const glide=neighbor(b,p,dir);if(cellAt(b,glide)!=='#')landing=glide;b.switchOn=false}
- if(mode==='magnet' && b.armed===1-i && b.box===neighbor(b,b.actors[i],(dir+2)%4)){b.box=b.actors[i];b.armed=-1;b.both=3}
+ if(mode==='magnet' && (!s.labels?.includes('Timed')||elapsed-b.beat<=1.2) && b.armed===1-i && b.box===neighbor(b,b.actors[i],(dir+2)%4)){b.box=b.actors[i];b.armed=-1;b.both=3}
  b.actors[i]=landing;
  if(mode==='route')b.held=-1;
+ if(mode==='pads'&&s.labels?.includes('Synchronized')){
+ const on=[cellAt(b,b.actors[0])==='a',cellAt(b,b.actors[1])==='b'];
+ if(on.some(Boolean)&&!b.marks.length){b.marks=[i];b.beat=elapsed}
+ if(b.marks.length&&elapsed-b.beat>1.2){b.actors=[s.map.join('').indexOf('A'),s.map.join('').indexOf('B')];b.marks=[];return 'miss'}
+ }
  if(mode==='pads')return cellAt(b,b.actors[0])==='a'&&cellAt(b,b.actors[1])==='b'?'done':'move';
  if(freight)return cellAt(b,b.box)==='G'?'done':'move';
  return cellAt(b,landing)==='G'&&Boolean(b.both&(1<<guide))?'done':'move';

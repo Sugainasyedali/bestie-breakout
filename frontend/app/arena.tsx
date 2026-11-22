@@ -17,7 +17,7 @@ type Props = {
   v: View;
   id: string;
   send: (p: Input) => void;
-  act: () => void;
+  act: (n?:number) => void;
   pause: () => void;
   emote: string;
   ready: () => void;
@@ -91,7 +91,7 @@ export function Arena(props: Props) {
           this.sky = this.add.image(400, 100, "world");
           this.g = this.add.graphics();
           this.keys = this.input.keyboard!.addKeys(
-            "A,D,W,LEFT,RIGHT,SPACE,E,ESC",
+            "A,D,W,S,UP,DOWN,LEFT,RIGHT,SPACE,E,ESC,ONE,TWO,THREE,FOUR",
             false,
           ) as typeof this.keys;
           try{const prefs=JSON.parse(sessionStorage.getItem('bestie-preferences')||'{}');this.reduced=this.reduced||prefs.reduced_motion===true}catch{}
@@ -196,13 +196,19 @@ export function Arena(props: Props) {
             Number(this.keys.D.isDown || this.keys.RIGHT.isDown) -
             Number(this.keys.A.isDown || this.keys.LEFT.isDown);
           const jump =
-            P.Input.Keyboard.JustDown(this.keys.W) ||
+            (!v.board && P.Input.Keyboard.JustDown(this.keys.W)) ||
             P.Input.Keyboard.JustDown(this.keys.SPACE);
           const typing = ["INPUT", "SELECT", "TEXTAREA"].includes(
             document.activeElement?.tagName || "",
           );
           if (!live) this.lastMove = 0;
-          if (live && !typing && (move !== this.lastMove || jump)) {
+          if(live&&!typing&&v.board){
+            const bindings=[["UP","W"],["RIGHT","D"],["DOWN","S"],["LEFT","A"]];
+            bindings.forEach((names,n)=>{if(names.some(name=>P.Input.Keyboard.JustDown(this.keys[name])))act(n)});
+            ["ONE","TWO","THREE","FOUR"].forEach((name,n)=>{if(P.Input.Keyboard.JustDown(this.keys[name]))act(n)});
+            if(jump)act(4);
+          }
+          if (live && !typing && !v.board && (move !== this.lastMove || jump)) {
             send({ move, jump });
             this.lastMove = move;
             if (jump) {
@@ -212,7 +218,7 @@ export function Arena(props: Props) {
             }
           }
           if (live && !typing && P.Input.Keyboard.JustDown(this.keys.E)) {
-            act();
+            act(v.board?4:undefined);
             this.reach = t + 340;
           }
           if (

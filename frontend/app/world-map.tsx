@@ -21,7 +21,7 @@ type Props = {
 
 const motifs = [Castle, Settings2, Leaf, Gamepad2, Cloud, Pizza];
 const accents = ["#ffbf8c", "#ffd56c", "#94dcc0", "#d9aaff", "#a9d9ff", "#ffac9c"];
-const points = [[9,66],[24,37],[40,59],[56,32],[73,53],[91,29]];
+const points = [[9,28],[29,20],[49,28],[69,20],[90,28],[90,70],[69,79],[49,70],[29,79],[9,70]];
 const difficulty = ["Easy", "Steady", "Tricky", "Tough", "Expert"];
 
 function stars(n: number, size: number) {
@@ -90,8 +90,8 @@ export function WorldMap({ max, progress, onSelect, onBack }: Props) {
               })}
             </div>
             <div className="wm-map-foot">
-              <span><Star size={16} fill="currentColor"/> {earned} / 18 world stars</span>
-              <span>{stages.filter(s => (saved.get(s.id)?.completion_count || 0) > 0).length} / 6 cleared</span>
+              <span><Star size={16} fill="currentColor"/> {earned} / {stages.length * 3} world stars</span>
+              <span>{stages.filter(s => (saved.get(s.id)?.completion_count || 0) > 0).length} / 10 cleared</span>
             </div>
           </div>
           <div className="wm-detail" aria-live="polite">

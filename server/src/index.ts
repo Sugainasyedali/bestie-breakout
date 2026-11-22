@@ -45,18 +45,18 @@ export function makeServer() {
   const queue=saveQueue((attempt)=>{for(const r of rooms.values())if(r.attempt===attempt){r.v.saveStatus='saved';emit(r)}});
   function record(r:Room,abandoned=false){const v=r.v;if(!v.round||r.recorded===v.round||(!abandoned&&v.phase!=="results"))return;
    r.recorded=v.round;const h=abandoned?undefined:v.history.at(-1),level=v.level??1;
-   if(h?.win)r.slots.forEach(s=>s.max=Math.max(s.max,Math.min(36,level+1)));
+   if(h?.win)r.slots.forEach(s=>s.max=Math.max(s.max,Math.min(60,level+1)));
    if(!r.slots.some(s=>s.user)&&!process.env.DATABASE_URL_POOLED){v.saveStatus='guest';return}
    v.saveStatus=r.slots.some(s=>s.user)?'pending':'guest';
    queue.add({id:r.attempt,session:r.session,round:v.round,level,hash:createHash('sha256').update(r.session+r.v.code).digest('hex'),host:r.originalHost,start:r.campaignStart,end:new Date().toISOString(),outcome:abandoned?'abandoned':h?.win?'win':'loss',score:h?.score??0,stars:h?.stars??0,mistakes:v.mistakes,seconds:h?.seconds??Math.round(catalog[level-1].limit-v.time),players:r.slots.map((s,i)=>({user:s.user,guest:s.id,role:i,character:v.players[i].shape}))})}
-  function begin(r:Room,level:number){r.started=new Date().toISOString();r.attempt=randomUUID();start(r.v,Math.floor((level-1)/6),level)}
+  function begin(r:Room,level:number){r.started=new Date().toISOString();r.attempt=randomUUID();start(r.v,catalog[level-1].world,level)}
   io.use(async(socket,next)=>{const ticket=socket.handshake.auth?.ticket;if(!ticket)return next();try{const p=verifyTicket(ticket);
    const result=await pool().query("insert into bestie.consumed_tickets(jti,expires_at) select $1,to_timestamp($2::double precision/1000) from bestie.player_profiles where id=$3 and auth_user_id=$4 on conflict do nothing returning jti",[p.jti,p.exp,p.profile,p.sub]);if(!result.rowCount)throw Error();
    socket.data.user=p.profile;socket.data.max=await unlocked(p.profile);socket.data.cosmetic=(await pool().query('select cosmetic_id from bestie.player_inventory where user_id=$1 and is_equipped limit 1',[p.profile])).rows[0]?.cosmetic_id;
    await pool().query('delete from bestie.consumed_tickets where expires_at<now()');next()}catch{next(Error('Account session could not be verified. Sign in again or retry.'))}});
   function emit(r: Room) {
     record(r);
-    r.v.maxLevel=Math.min(36,...r.slots.map(s=>s.max));
+    r.v.maxLevel=Math.min(60,...r.slots.map(s=>s.max));
     r.slots.forEach((s, i) => {
       if (s.socket)
         io.to(s.socket).emit("state", {
@@ -229,7 +229,7 @@ export function makeServer() {
             v.phase === "results" &&
             !v.outro &&
             (cmd === "again" ||
-              (cmd === "next" && (v.level??1)<Math.min(36,...r.slots.map(s=>s.max)) && v.history.at(-1)?.win))
+              (cmd === "next" && (v.level??1)<Math.min(60,...r.slots.map(s=>s.max)) && v.history.at(-1)?.win))
           ) {
             r.slots.forEach((s) => (s.input = { move: 0, jump: false }));
             if (cmd === "again") v.history.pop();

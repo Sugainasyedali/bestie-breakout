@@ -275,7 +275,7 @@ export function MissionScreen({
         v={v}
         id={id}
         send={send}
-        act={() => act(-1)}
+        act={(n) => act(n??-1)}
         pause={pause}
         emote={msg}
         ready={() => {
@@ -289,7 +289,7 @@ export function MissionScreen({
             {v.players[0] && <Seat p={v.players[0]} num={1} />}
             <div className="missionPlate">
               <small>
-                <Flag size={13} /> LEVEL {level.id} / 36
+                <Flag size={13} /> LEVEL {level.id} / 60
               </small>
               <h1>{level.title}</h1>
               <div className="dots">
@@ -326,7 +326,7 @@ export function MissionScreen({
               {msg.split("|")[1]}
             </div>
           )}
-          <div className="station">
+          <div className="station">{v.board&&<div className="keyLegend">Arrows / WASD · 1–4 panels · E / Space tool</div>}
             {v.board&&level.challenge?<ChallengeControls stage={level.challenge.stages[v.board.stage]} board={v.board} seat={idx} act={act} time={level.limit-v.time}/>:<>
             {role && (
               <div className="roleTag">
@@ -611,12 +611,12 @@ export function MissionScreen({
               {m === 5 && (
                 <p>
                   Adventure total · {v.history.reduce((s, r) => s + r.stars, 0)}{" "}
-                  / 18 stars
+                  / {catalog.length * 3} stars
                 </p>
               )}
               {host ? (
                 <div className="gameKeys">
-                  {win && level.id < (v.maxLevel??36) && (
+                  {win && level.id < (v.maxLevel??60) && (
                     <button className="next" onClick={() => command("next")}>
                       Next mission
                     </button>

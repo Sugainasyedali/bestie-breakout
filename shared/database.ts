@@ -11,7 +11,7 @@ export async function profileFor(subject:string,name:string){
  const profile=r.rows[0] as {id:string;auth_user_id:string;username:string;display_name:string;avatar_object_key:string|null;character_color:string;character_id:string;bio:string};
  await pool().query('insert into bestie.player_settings(user_id) values($1) on conflict do nothing',[profile.id]);await pool().query('insert into bestie.player_stats(user_id) values($1) on conflict do nothing',[profile.id]);return profile;
 }
-export async function unlocked(id:string){const r=await pool().query('select coalesce(min(l.id),36) as n from bestie.game_levels l where l.is_active and not exists(select 1 from bestie.player_level_progress p where p.user_id=$1 and p.level_id=l.id and p.completion_count>0)',[id]);return Number(r.rows[0].n)}
+export async function unlocked(id:string){const r=await pool().query('select coalesce(min(l.id),60) as n from bestie.game_levels l where l.is_active and not exists(select 1 from bestie.player_level_progress p where p.user_id=$1 and p.level_id=l.id and p.completion_count>0)',[id]);return Number(r.rows[0].n)}
 export type Attempt={id:string;session:string;round:number;level:number;hash:string;host:string|null;start:string;end:string;outcome:'win'|'loss'|'abandoned';seconds:number;score:number;stars:number;mistakes:number;players:{user:string|null;guest:string;character:string;role:number}[]};
 export async function saveAttempt(a:Attempt,connection?:Pick<pg.PoolClient,'query'>){
  const client=connection??await pool().connect(),q=client.query.bind(client);
@@ -32,8 +32,8 @@ export async function saveAttempt(a:Attempt,connection?:Pick<pg.PoolClient,'quer
  await q(`insert into player_stats as s(user_id,total_xp,total_stars,levels_completed,total_playtime_seconds,total_games,best_teamwork_score) values($1,$2,$3,$4,$5,1,$6) on conflict(user_id) do update set total_xp=s.total_xp+excluded.total_xp,total_stars=excluded.total_stars,levels_completed=excluded.levels_completed,total_playtime_seconds=s.total_playtime_seconds+excluded.total_playtime_seconds,total_games=s.total_games+1,best_teamwork_score=greatest(s.best_teamwork_score,excluded.best_teamwork_score),updated_at=now()`,[p.user,win?50+a.stars*15:0,complete.reduce((sum,row)=>sum+row.best_stars,0),complete.length,a.seconds,a.score]);
  if(!win)continue;
  const levels=new Set(complete.map(r=>r.level_id));const sessionWins=Number((await q("select count(distinct level_id) n from level_attempts a join level_attempt_players p on a.id=p.attempt_id where session_id=$1 and outcome='win' and user_id=$2",[a.session,p.user])).rows[0].n);
- const fullWorld=(w:number)=>Array.from({length:6},(_,i)=>levels.has(w*6+i+1)).every(Boolean);
- const conditions=[true,a.mistakes===0,sessionWins>=6,fullWorld(3),a.seconds<catalog[a.level-1].limit/2,a.mistakes>=5,[0,1,2,3,4,5].some(fullWorld),levels.size===36];
+ const fullWorld=(w:number)=>catalog.filter(l=>l.world===w).map(l=>levels.has(l.id)).every(Boolean);
+ const conditions=[true,a.mistakes===0,sessionWins>=6,fullWorld(3),a.seconds<catalog[a.level-1].limit/2,a.mistakes>=5,[0,1,2,3,4,5].some(fullWorld),levels.size===60];
  for(const [i,earned] of conditions.entries())if(earned){await q('insert into player_achievements(user_id,achievement_id) values($1,$2) on conflict do nothing',[p.user,i+1]);await q('insert into player_inventory(user_id,cosmetic_id,source) values($1,$2,$3) on conflict do nothing',[p.user,['scout-cap','star-pin','violet-dye','arcade-crown','wing-pin','party-hat','explorer-hat','gold-crown'][i],'achievement-'+(i+1)])}
  }
  await q('commit')
