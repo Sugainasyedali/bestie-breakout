@@ -11,6 +11,8 @@ import {
   type Board, type Stage,
 } from "../../shared/content/engine.js";
 
+import {catalog} from '../../shared/catalog.js';
+
 type Press = [seat: number, button: number];
 type SearchNode = { board: Board; parent: number; presses: Press[] };
 const directions = [0, 1, 2, 3];
@@ -99,7 +101,7 @@ test("each world adds exactly five uniquely named challenges", () => {
   assert.equal(new Set(worlds.flat().map(level => level.title)).size, 30);
 });
 
-for (const level of worlds.flat()) {
+for (const level of [...worlds.flat(), ...catalog.slice(36).map(l=>l.challenge!)]) {
   test(level.title + " reaches the authoritative win state from both starting seats", () => {
     assert.ok(level.limit > 0 && level.stages.length > 0);
     for (const [index, s] of level.stages.entries()) {

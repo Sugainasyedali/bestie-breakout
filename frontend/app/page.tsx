@@ -66,6 +66,7 @@ export default function Home() {
   const previous = useRef<View | null>(null),
     sock = useRef<Socket<ServerEvents, ClientEvents> | null>(null),
     timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(()=>{const update=(e:Event)=>U((e as CustomEvent).detail.sound_enabled);window.addEventListener('bestie-preferences',update);return()=>window.removeEventListener('bestie-preferences',update)},[]);
   function toggle() {
     arcadeAudio.unlock();
     arcadeAudio.setEffects(!sound);
