@@ -1,3 +1,6 @@
+import {VillageSimulation,idleInput} from './game3d/simulation.js';
+import {village} from '../../shared/game3d/village.js';
+import type {Input3D} from '../../shared/game3d/types.js';
 import {verifyTicket} from "../../shared/tickets.js";
 import {pool,unlocked} from "../../shared/database.js";
 import {catalog} from "../../shared/catalog.js";
@@ -19,6 +22,7 @@ import {
 import { action, start, tick } from "./game.js";
 type Room = {
   v: View;
+  simulation?:VillageSimulation; inputs3d?:Input3D[]; inputTimes?:number[];
   session:string; attempt:string; recorded:number; started:string; campaignStart:string; originalHost:string|null;
   slots: {
     id: string;
@@ -48,8 +52,8 @@ export function makeServer() {
    if(h?.win)r.slots.forEach(s=>s.max=Math.max(s.max,Math.min(60,level+1)));
    if(!r.slots.some(s=>s.user)&&!process.env.DATABASE_URL_POOLED){v.saveStatus='guest';return}
    v.saveStatus=r.slots.some(s=>s.user)?'pending':'guest';
-   queue.add({id:r.attempt,session:r.session,round:v.round,level,hash:createHash('sha256').update(r.session+r.v.code).digest('hex'),host:r.originalHost,start:r.campaignStart,end:new Date().toISOString(),outcome:abandoned?'abandoned':h?.win?'win':'loss',score:h?.score??0,stars:h?.stars??0,mistakes:v.mistakes,seconds:h?.seconds??Math.round(catalog[level-1].limit-v.time),players:r.slots.map((s,i)=>({user:s.user,guest:s.id,role:i,character:v.players[i].shape}))})}
-  function begin(r:Room,level:number){r.started=new Date().toISOString();r.attempt=randomUUID();start(r.v,catalog[level-1].world,level)}
+   queue.add({contentVersion:v.adventure?4:1,limit:v.adventure?village.limit:catalog[level-1].limit,id:r.attempt,session:r.session,round:v.round,level,hash:createHash('sha256').update(r.session+r.v.code).digest('hex'),host:r.originalHost,start:r.campaignStart,end:new Date().toISOString(),outcome:abandoned?'abandoned':h?.win?'win':'loss',score:h?.score??0,stars:h?.stars??0,mistakes:v.mistakes,seconds:h?.seconds??Math.round((v.adventure?village.limit:catalog[level-1].limit)-v.time),players:r.slots.map((s,i)=>({user:s.user,guest:s.id,role:i,character:v.players[i].shape}))})}
+  function begin(r:Room,level:number,three=false){r.simulation?.dispose();r.simulation=undefined;r.v.adventure=undefined;r.started=new Date().toISOString();r.attempt=randomUUID();start(r.v,catalog[level-1].world,level);if(three){r.simulation=new VillageSimulation();r.v.adventure=r.simulation.state;r.v.board=undefined;r.v.time=village.limit;r.inputs3d=[idleInput(),idleInput()];r.inputTimes=[0,0]}}
   io.use(async(socket,next)=>{const ticket=socket.handshake.auth?.ticket;if(!ticket)return next();try{const p=verifyTicket(ticket);
    const result=await pool().query("insert into bestie.consumed_tickets(jti,expires_at) select $1,to_timestamp($2::double precision/1000) from bestie.player_profiles where id=$3 and auth_user_id=$4 on conflict do nothing returning jti",[p.jti,p.exp,p.profile,p.sub]);if(!result.rowCount)throw Error();
    socket.data.user=p.profile;socket.data.max=await unlocked(p.profile);socket.data.cosmetic=(await pool().query('select cosmetic_id from bestie.player_inventory where user_id=$1 and is_equipped limit 1',[p.profile])).rows[0]?.cosmetic_id;
@@ -69,6 +73,7 @@ export function makeServer() {
   }
   function remove(r: Room, i: number) {
     if(r.v.phase==="game")record(r,true);
+    r.simulation?.dispose();r.simulation=undefined;r.v.adventure=undefined;
     r.slots.splice(i, 1);
     r.v.players.splice(i, 1);
     if (!r.slots.length) {
@@ -214,28 +219,30 @@ export function makeServer() {
         if(typeof cmd==="string"&&cmd.startsWith("level:")&&v.phase==="lobby"){const n=Number(cmd.slice(6));if(Number.isInteger(n)&&n>=1&&n<=Math.min(...r.slots.map(s=>s.max))){v.level=n;v.players.forEach(p=>p.ready=false)}else socket.emit("notice","Both friends must unlock this level.");}
         else if (cmd === "lobby") {
           if(v.phase==="game")record(r,true);
+          r.simulation?.dispose();r.simulation=undefined;v.adventure=undefined;
           v.phase = "lobby";
           v.players.forEach((p) => (p.ready = false));
         } else if (v.players.length === 2 && v.players.every((p) => p.online)) {
           if (
-            cmd === "start" &&
+            (cmd === "start" || cmd === "start3d") &&
             v.phase === "lobby" &&
             v.players.every((p) => p.ready)
           ) {
             r.slots.forEach((s) => (s.input = { move: 0, jump: false }));
             v.history = [];
-            r.session=randomUUID();r.campaignStart=new Date().toISOString();r.originalHost=r.slots[i].user;begin(r,Math.min(v.level??1,...r.slots.map(s=>s.max)));
+            r.session=randomUUID();r.campaignStart=new Date().toISOString();r.originalHost=r.slots[i].user;begin(r,cmd==="start3d"?1:Math.min(v.level??1,...r.slots.map(s=>s.max)),cmd==="start3d");
           } else if (
             v.phase === "results" &&
             !v.outro &&
             (cmd === "again" ||
-              (cmd === "next" && (v.level??1)<Math.min(60,...r.slots.map(s=>s.max)) && v.history.at(-1)?.win))
+              (cmd === "next" && !v.adventure && (v.level??1)<Math.min(60,...r.slots.map(s=>s.max)) && v.history.at(-1)?.win))
           ) {
             r.slots.forEach((s) => (s.input = { move: 0, jump: false }));
             if (cmd === "again") v.history.pop();
-            begin(r,(v.level??1)+(cmd==="next"?1:0));
+            begin(r,(v.level??1)+(cmd==="next"?1:0),!!v.adventure);
           } else if (cmd === "pause" && v.phase === "game") {
             v.paused = !v.paused;
+            if(r.inputs3d)r.inputs3d=r.inputs3d.map(input=>({...idleInput(),seq:input.seq}));
             r.slots.forEach((s) => (s.input = { move: 0, jump: false }));
           }
         }
@@ -247,7 +254,18 @@ export function makeServer() {
       if (seat && room?.v.phase === "game" && room.v.round === round)
         seat.loaded = round;
     });
+    socket.on("input3d", (p) => {
+      if(!room?.simulation||room.v.phase!=="game"||room.v.paused||room.v.intro||!room.v.players.every(p=>p.online))return;
+      const i=room.slots.findIndex(s=>s.id===id);if(i<0||!p||p.round!==room.v.round||![p.x,p.z,p.climb,p.seq].every(Number.isFinite)||Math.abs(p.x)>1||Math.abs(p.z)>1||Math.abs(p.climb)>1||!Number.isSafeInteger(p.seq)||p.seq<0||p.seq<=room.inputs3d![i].seq)return;
+      const jump=room.inputs3d![i].jump||p.jump===true;
+      room.inputs3d![i]={x:p.x,z:p.z,climb:p.climb,seq:p.seq,round:p.round,jump,sprint:p.sprint===true};room.inputTimes![i]=Date.now();
+    });
+    socket.on("interact3d", (p) => {
+      if(!room?.simulation||!p||p.round!==room.v.round||room.v.phase!=="game"||room.v.paused||room.v.intro||!room.v.players.every(p=>p.online)||Date.now()-lastAction<180)return;
+      const i=room.slots.findIndex(s=>s.id===id);if(i<0)return;lastAction=Date.now();room.simulation.interact(i,p.drop===true);emit(room);
+    });
     socket.on("input", (p) => {
+      if(room?.simulation)return;
       const s = room?.slots.find((s) => s.id === id);
       if (
         s &&
@@ -262,6 +280,7 @@ export function makeServer() {
       }
     });
     socket.on("action", (n) => {
+      if(room?.simulation)return;
       if (
         room &&
         !room.v.intro &&
@@ -311,6 +330,7 @@ export function makeServer() {
         input: { move: 0, jump: false },
       });
       r.v.players[i].online = false;
+      if(r.inputs3d)r.inputs3d=r.inputs3d.map(input=>({...idleInput(),seq:input.seq}));
       if (r.v.host === id)
         r.v.host = r.v.players.find((p) => p.online)?.id || id;
       emit(r);
@@ -330,6 +350,14 @@ export function makeServer() {
             r.slots.every((s) => s.socket && s.loaded === r.v.round)
           )
             r.v.intro = Math.max(0, r.v.intro - 0.025);
+        } else if(r.simulation){
+          if(!r.v.paused&&r.v.players.every(p=>p.online)){
+            const inputs=r.inputs3d!.map((input,i)=>Date.now()-r.inputTimes![i]>300?{...idleInput(),seq:input.seq}:input);
+            const win=r.simulation.step(inputs);const state=r.simulation.state;
+            r.v.time=Math.max(0,village.limit-state.elapsed);r.v.correct=state.keys.filter(k=>k.delivered).length;r.v.mistakes=state.players.reduce((n,p)=>n+p.respawns,0);
+            if(win||!r.v.time){const stars=win?(r.v.mistakes===0&&state.elapsed<=210?3:r.v.mistakes<4?2:1):0;
+              r.v.history.push({mission:0,win,seconds:Math.round(state.elapsed),mistakes:r.v.mistakes,correct:r.v.correct,score:win?stars===3?100:stars===2?80:60:0,stars,title:win?'The village is open. You did it together!':'A fresh start, besties?'});r.v.phase='results';r.v.outro=1.2;}
+          }
         } else
           tick(
             r.v,
@@ -346,7 +374,7 @@ export function makeServer() {
   return {
     http,
     close: () => {
-      queue.close();clearInterval(timer);
+      queue.close();clearInterval(timer);for(const r of rooms.values())r.simulation?.dispose();
       io.close();
     },
   };

@@ -18,6 +18,7 @@ import {
   Pause,
   LogOut,
 } from "lucide-react";
+import { AdventureScreen } from "../game3d/ui/adventure-screen";
 import { MissionScreen } from "./mission-screen";
 import { arcadeAudio } from "./sound";
 import {
@@ -177,6 +178,7 @@ export default function Home() {
     S("home");
     E("");
   }
+  if(v?.adventure&&v.phase!=="lobby")return <AdventureScreen v={v} id={id} online={online} msg={msg} command={command} send={p=>sock.current?.emit("input3d",p)} interact={drop=>sock.current?.emit("interact3d",{round:v.round,drop})} loaded={round=>sock.current?.emit("loaded",round)} chat={m=>sock.current?.emit("chat",m)} leave={leave} effects={sound} toggleEffects={toggle}/>;
   if (v && v.phase !== "lobby")
     return (
       <MissionScreen
@@ -445,7 +447,9 @@ export default function Home() {
                     );
                   })}
                 </div>
+                <p><strong>New: Pinewood 3D adventure</strong> · Explore the village, find two keys, and escape together. First-level preview with original provisional characters.</p>
                 <div className="buttons">
+                  {isHost&&<button className="primary" disabled={v.players.length!==2||!v.players.every(p=>p.online&&p.ready)} onClick={()=>command("start3d")}>Play 3D village</button>}
                   <button onClick={() => command("ready")}>
                     {v.players[idx]?.ready ? "Cancel ready" : "Ready up"}
                   </button>
@@ -459,7 +463,7 @@ export default function Home() {
                       onClick={() => command("start")}
                     >
                       <Play size={17} />
-                      Start game
+                      Play classic campaign
                     </button>
                   )}
                 </div>

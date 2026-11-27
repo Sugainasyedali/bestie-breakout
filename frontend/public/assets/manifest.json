@@ -1,0 +1,12 @@
+{
+  "version": 4,
+  "license": "Original project assets, generated from repository source; no third-party model or animation content.",
+  "status": "Provisional low-poly art; not production-reviewed character animation",
+  "characters": {
+    "Bunny": {"name":"Pip","url":"/assets/characters/pip.glb"},
+    "Sprout": {"name":"Fern","url":"/assets/characters/fern.glb"}
+  },
+  "clips": ["idle","walk","run","jump","fall","land","climb","carry","interact","celebrate","wave","laugh","cry","confused"],
+  "source": "scripts/build-adventurers.mjs",
+  "environment": {"source":"frontend/game3d/scenes/village.tsx","type":"original reusable procedural geometry"}
+}

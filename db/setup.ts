@@ -1,3 +1,4 @@
+import {village,villageBlocks} from '../shared/game3d/village.js';
 import pg from 'pg';import {readFile} from 'node:fs/promises';import {createHash} from 'node:crypto';import {catalog,worlds,descriptions,badges,badgeHints,slug} from '../shared/catalog.js';
 export async function seed(q:(sql:string,params?:any[])=>Promise<any>){
  for(const [i,w] of worlds.entries())await q('insert into bestie.game_worlds(id,slug,name,description,world_number,thumbnail,background_asset,difficulty) values($1,$2,$3,$4,$1,$5,$6,$1) on conflict(id) do update set name=excluded.name,description=excluded.description',[i+1,slug(w),w,descriptions[i],'/art/m'+(i+1)+'.svg','/art/worlds/'+i+'.svg']);
@@ -11,5 +12,11 @@ export async function migrate(q:(sql:string,params?:any[])=>Promise<any>){await 
  if(!existing){await q(source);await q('insert into bestie.migrations values(1,$1)',[hash])}else if(existing.checksum!==hash)throw Error('Migration checksum mismatch');
  await q('alter table bestie.game_levels drop constraint if exists game_levels_level_number_check');
  await q('alter table bestie.game_levels add constraint game_levels_level_number_check check(level_number between 1 and 60)');
- await seed(q);await q('commit')}catch(e){await q('rollback');throw e}}
+ const update=await readFile(new URL('./migrations/002_content_versions.sql',import.meta.url),'utf8'),updateHash=createHash('sha256').update(update).digest('hex');
+ const previous=(await q('select checksum from bestie.migrations where version=2')).rows[0];
+ if(!previous){await q(update);await q('insert into bestie.migrations values(2,$1)',[updateHash])}else if(previous.checksum!==updateHash)throw Error('Content migration checksum mismatch');
+ await seed(q);
+ await q('insert into bestie.game_level_versions(level_id,content_version,title,level_config) select id,content_version,title,level_config from bestie.game_levels on conflict do nothing');
+ await q('insert into bestie.game_level_versions(level_id,content_version,title,level_config) values(1,4,$1,$2) on conflict(level_id,content_version) do update set title=excluded.title,level_config=excluded.level_config',[village.title,JSON.stringify({...village,blocks:villageBlocks})]);
+ await q('commit')}catch(e){await q('rollback');throw e}}
 if(process.argv[1]?.endsWith('setup.ts')){if(!process.env.DATABASE_URL)throw Error('Set DATABASE_URL for migrations.');const c=new pg.Client({connectionString:process.env.DATABASE_URL});await c.connect();try{await migrate(c.query.bind(c));console.log('Campaign schema ready. Six worlds and 60 levels seeded.')}finally{await c.end()}}
