@@ -98,3 +98,9 @@ The campaign now contains 60 levels, ten per world. Existing level IDs 1–36 an
 Board controls: arrow keys or WASD move or select a direction; number keys 1–4 select panels; E or Space activates the tool. Platform controls retain A/D or left/right movement, W/Space jump and E interaction. Text fields do not trigger gameplay actions. On-screen controls remain available.
 
 After pulling `upgrade/bestie-3`, run `npm ci`, `npm run db:setup` (with your database environment configured), then `npm run dev`. The schema update extends the level-number constraint without rewriting the original migration or deleting progress. Run `npm test` and `npm run build` to verify locally. Automated tests cover legal winning input traces and missing-partner rejection for all 54 board challenges, timing boundaries, sixty-level seeding, and multiplayer room lifecycle. Browser feel, difficulty tuning with real players, and live Neon services still require playtesting.
+
+### Development startup troubleshooting
+
+Development and production both use Webpack. Shared TypeScript modules use `.js` import specifiers for the compiled Node server; `frontend/next.config.mjs` maps those imports to TypeScript for the browser. Keep `next dev --webpack` in the frontend script: plain `next dev` uses Turbopack and can fail with `Can't resolve './content/castle.js'` and similar errors.
+
+Stop your previous development command with Ctrl+C before restarting `npm run dev`. If port 3000 is occupied, use the Local URL printed by Next.js (for example, http://localhost:3001), or choose a port with `npm run dev -- --port 3001`. The game server still uses port 4000, so run only one copy of the root development launcher. The launcher invokes npm through Node without a shell, avoiding the Windows DEP0190 warning.
