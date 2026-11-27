@@ -1,3 +1,4 @@
+import type {AdventureState, Input3D} from './game3d/types.js';
 import type {Board} from "./content/engine.js";
 export const missions = [
   [
@@ -42,6 +43,7 @@ export const toppings = ["Cheese", "Tomato", "Mushroom", "Olive"];
 export const directions = ["Up", "Right", "Down", "Left"];
 export const chats = [
   "HELP ME!",
+  "COME HERE!", "I FOUND THE KEY!", "PRESS THE SWITCH!", "TAKE THIS!", "JUMP NOW!", "LOOK UP!",
   "WAIT FOR ME!",
   "WHAT ARE YOU DOING?",
   "RUNNN!",
@@ -84,6 +86,7 @@ export type Result = {
   title: string;
 };
 export type View = {
+  adventure?: AdventureState;
   code: string;
   host: string;
   players: Player[];
@@ -130,6 +133,8 @@ export interface ClientEvents {
   loaded: (round: number) => void;
   input: (p: Input) => void;
   action: (n: number) => void;
+  input3d: (p: Input3D) => void;
+  interact3d: (p: {round:number;drop:boolean}) => void;
   chat: (s: string) => void;
 }
 export interface ServerEvents {

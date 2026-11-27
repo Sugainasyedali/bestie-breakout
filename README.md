@@ -104,3 +104,9 @@ After pulling `upgrade/bestie-3`, run `npm ci`, `npm run db:setup` (with your da
 Development and production both use Webpack. Shared TypeScript modules use `.js` import specifiers for the compiled Node server; `frontend/next.config.mjs` maps those imports to TypeScript for the browser. Keep `next dev --webpack` in the frontend script: plain `next dev` uses Turbopack and can fail with `Can't resolve './content/castle.js'` and similar errors.
 
 Stop your previous development command with Ctrl+C before restarting `npm run dev`. If port 3000 is occupied, use the Local URL printed by Next.js (for example, http://localhost:3001), or choose a port with `npm run dev -- --port 3001`. The game server still uses port 4000, so run only one copy of the root development launcher. The launcher invokes npm through Node without a shell, avoiding the Windows DEP0190 warning.
+
+## 4.0 — first 3D village preview
+
+The lobby now offers **Play 3D village** after both players ready up. This starts **The Locked Village Gate** with a Three.js/R3F renderer, original skinned GLB characters, server-authoritative Rapier physics, two cooperative key routes, a ladder mechanism and a shared exit. The classic campaign is retained during this staged conversion.
+
+After updating, run `npm ci` and `npm run db:setup` before `npm run dev`. Migration 002 preserves existing progress and records content versions for new attempts. The 3D village uses level 1, content version 4; the classic version remains available. The 36-level redesign is not complete. Read [the vertical-slice implementation and acceptance status](docs/3D-VERTICAL-SLICE.md), including the required two-browser verification gate and asset limitations.
